@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { width: 220px; padding: 15px; font-family: sans-serif; text-align: center; }
+    
+    /* Main Button Styles */
+    #devBtn { 
+      background-color: #333; color: white; border: none; 
+      padding: 10px 20px; cursor: pointer; border-radius: 5px; width: 100%;
+      margin-top: 10px; font-weight: bold;
+    }
+    #devBtn:hover { background-color: #555; }
+    
+    .hidden { display: none; }
+    #status { margin-bottom: 10px; font-size: 14px; color: #666; }
+
+    /* Custom Input Section Styles */
+    hr { margin: 15px 0; border: 0; border-top: 1px solid #eee; }
+    .custom-section { text-align: left; font-size: 12px; }
+    input[type="text"] {
+      width: 100%; box-sizing: border-box; padding: 5px;
+      margin-bottom: 5px; border: 1px solid #ccc; border-radius: 3px;
+    }
+    #saveBtn {
+      width: 100%; background-color: #f0f0f0; border: 1px solid #ccc;
+      padding: 5px; cursor: pointer; border-radius: 3px;
+    }
+    #saveBtn:hover { background-color: #e0e0e0; }
+  </style>
+</head>
+<body>
+  <div id="status">Checking...</div>
+  
+  <button id="devBtn" class="hidden">Go to Dev Site</button>
+
+  <hr>
+  <div class="custom-section">
+    <label for="customUrl">Set Custom Override:</label>
+    <input type="text" id="customUrl" placeholder="https://custom-dev-url.com">
+    <button id="saveBtn">Save & Use</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
