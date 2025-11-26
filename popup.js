@@ -5,11 +5,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const devBtn = document.getElementById('devBtn');
   const customUrlInput = document.getElementById('customUrl');
   const saveBtn = document.getElementById('saveBtn');
-
-  // We need to store the hostname globally so the Save button can access it
   let currentCleanHost = "";
 
-  // 1. Get the current Tab URL
+  // --- CONFIGURATION ---
+  const PROJECT_MAPPINGS = {
+     // Add manual exceptions here if needed
+     // "avenuehouse.org": "stephenshouse"
+  };
+
+  // 1. Get Current Tab
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (!tabs || !tabs[0] || !tabs[0].url) {
       statusDiv.innerText = "Error: Cannot read tab URL.";
@@ -18,48 +22,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const currentTab = tabs[0];
     const url = new URL(currentTab.url);
-    
-    // Create the clean host key (e.g. "londondesigneroutlet.com")
     currentCleanHost = url.hostname.replace('www.', '');
 
-    // 2. Check Storage for existing override
-    // We check for runtime errors to ensure 'storage' permission is active
+    // 2. Check Storage
     try {
       chrome.storage.sync.get([currentCleanHost], (result) => {
-        if (chrome.runtime.lastError) {
-          console.error(chrome.runtime.lastError);
-          statusDiv.innerText = "Storage Error. Try removing extension.";
-          statusDiv.style.color = "red";
-          return;
-        }
+        if (chrome.runtime.lastError) return;
 
         const savedUrl = result[currentCleanHost];
 
         if (savedUrl) {
-          // A. Saved Custom URL found
           customUrlInput.value = savedUrl; 
           updateButton(savedUrl, "Custom Override Active");
         } else {
-          // B. No custom URL, run auto-detect
           runAutoDetect(currentTab, url, currentCleanHost);
         }
       });
     } catch (e) {
-      statusDiv.innerText = "Permission Error. Reload Extension.";
-      statusDiv.style.color = "red";
+      runAutoDetect(currentTab, url, currentCleanHost);
     }
   });
 
-  // 3. Save Button Logic
+  // 3. Save Button
   saveBtn.onclick = () => {
     const newUrl = customUrlInput.value.trim();
-    
-    if (!currentCleanHost) {
-      statusDiv.innerText = "Error: No hostname identified.";
-      return;
-    }
+    if (!currentCleanHost) return;
 
-    // IF EMPTY: Delete the setting
     if (!newUrl) {
       chrome.storage.sync.remove(currentCleanHost, () => {
         statusDiv.innerText = "Override removed. Re-opening...";
@@ -69,19 +57,12 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // IF URL ENTERED: Save the setting
     let finalUrl = newUrl;
-    if (!finalUrl.startsWith('http')) {
-      finalUrl = 'https://' + finalUrl;
-    }
+    if (!finalUrl.startsWith('http')) finalUrl = 'https://' + finalUrl;
 
     saveBtn.innerText = "Saving...";
-
     chrome.storage.sync.set({ [currentCleanHost]: finalUrl }, () => {
       saveBtn.innerText = "Save & Use";
-      
-      // INSTANT UPDATE:
-      // This function call updates the button immediately without refresh
       updateButton(finalUrl, "Custom URL Saved!");
     });
   };
@@ -89,16 +70,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- HELPER FUNCTIONS ---
 
   function updateButton(targetUrl, statusMsg) {
-    // 1. Make button visible
     devBtn.classList.remove('hidden');
     devBtn.innerText = "Go to Dev Site";
     
-    // 2. Overwrite the onclick handler directly
-    devBtn.onclick = () => {
-      chrome.tabs.create({ url: targetUrl });
-    };
-
-    // 3. Update status text
+    // Clone button to ensure no duplicate listeners
+    const newBtn = devBtn.cloneNode(true);
+    devBtn.parentNode.replaceChild(newBtn, devBtn);
+    
+    newBtn.onclick = () => { chrome.tabs.create({ url: targetUrl }); };
+    
     statusDiv.innerText = statusMsg;
     statusDiv.style.color = "green";
   }
@@ -108,10 +88,21 @@ document.addEventListener('DOMContentLoaded', () => {
       statusDiv.innerText = "Searching for Dev URLs...";
       
       const projectName = cleanHost.split('.')[0];
-      const potentialDevUrls = [
-        `${url.protocol}//dev.${cleanHost}${url.pathname}`,
-        `${url.protocol}//${projectName}.dev.icgonline.co.uk${url.pathname}`
-      ];
+      const potentialDevUrls = [];
+
+      // Mappings
+      if (PROJECT_MAPPINGS[cleanHost]) {
+        let mappedValue = PROJECT_MAPPINGS[cleanHost];
+        if (mappedValue.startsWith('http')) {
+            potentialDevUrls.push(mappedValue);
+        } else {
+            potentialDevUrls.push(`${url.protocol}//${mappedValue}.dev.icgonline.co.uk${url.pathname}`);
+        }
+      }
+
+      // Standard Patterns
+      potentialDevUrls.push(`${url.protocol}//dev.${cleanHost}${url.pathname}`);
+      potentialDevUrls.push(`${url.protocol}//${projectName}.dev.icgonline.co.uk${url.pathname}`);
       
       checkUrls(potentialDevUrls);
     });
@@ -121,16 +112,35 @@ document.addEventListener('DOMContentLoaded', () => {
     let found = false;
     for (const testUrl of urls) {
       try {
-        const response = await fetch(testUrl, { method: 'HEAD' });
-        if (response.ok) {
+        console.log(`Testing: ${testUrl}`); 
+        
+        // SWITCHED TO 'GET' to match browser behavior
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 sec timeout
+
+        const response = await fetch(testUrl, { 
+            method: 'GET', // Changed from HEAD
+            cache: 'no-store',
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        console.log(`Response: ${response.status}`);
+        
+        // We accept almost ANY response code. 
+        // If the server talks back (even with a 500 error or 401), the site exists.
+        // We only fail on network timeout or DNS errors (catch block).
+        if (response.ok || [401, 403, 500, 503].includes(response.status)) {
           found = true;
           updateButton(testUrl, "Dev site found!");
           break; 
         }
       } catch (error) {
-        console.log(`Skipping ${testUrl}`);
+        console.log(`Failed to reach ${testUrl}`, error);
       }
     }
+    
     if (!found) {
       statusDiv.innerText = "No Dev site found. Set Custom URL below.";
       statusDiv.style.color = "#666";
