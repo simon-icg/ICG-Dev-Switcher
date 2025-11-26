@@ -1,44 +1,120 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <style>
-    body { width: 220px; padding: 15px; font-family: sans-serif; text-align: center; }
-    
-    /* Main Button Styles */
-    #devBtn { 
-      background-color: #333; color: white; border: none; 
-      padding: 10px 20px; cursor: pointer; border-radius: 5px; width: 100%;
-      margin-top: 10px; font-weight: bold;
+    body {
+      width: 240px;
+      padding: 16px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      text-align: center;
+      background-color: #f9f9f9;
+      color: #333;
     }
-    #devBtn:hover { background-color: #555; }
-    
-    .hidden { display: none; }
-    #status { margin-bottom: 10px; font-size: 14px; color: #666; }
 
-    /* Custom Input Section Styles */
-    hr { margin: 15px 0; border: 0; border-top: 1px solid #eee; }
-    .custom-section { text-align: left; font-size: 12px; }
+    /* Main Button */
+    .btn-main {
+      background-color: #222;
+      color: white;
+      border: none;
+      padding: 12px 15px;
+      cursor: pointer;
+      border-radius: 6px;
+      width: 100%;
+      font-weight: 600;
+      font-size: 14px;
+      transition: background 0.2s;
+      margin-top: 10px;
+    }
+    .btn-main:hover { background-color: #444; }
+    .btn-main:disabled { background-color: #999; cursor: default; }
+
+    .hidden { display: none; }
+    
+    /* Status Text */
+    #status {
+      margin-bottom: 12px;
+      font-size: 13px;
+      line-height: 1.4;
+      font-weight: 500;
+    }
+
+    /* Divider */
+    hr { margin: 15px 0; border: 0; border-top: 1px solid #e0e0e0; }
+
+    /* Toggle Link */
+    .toggle-link {
+      font-size: 11px;
+      color: #888;
+      text-decoration: underline;
+      cursor: pointer;
+      margin-top: 10px;
+      display: inline-block;
+    }
+    .toggle-link:hover { color: #555; }
+
+    /* Custom Input Area */
+    .custom-section { text-align: left; margin-top: 10px; }
+    .custom-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: #777;
+      letter-spacing: 0.5px;
+      margin-bottom: 5px;
+      display: block;
+    }
+    
     input[type="text"] {
-      width: 100%; box-sizing: border-box; padding: 5px;
-      margin-bottom: 5px; border: 1px solid #ccc; border-radius: 3px;
+      width: 100%;
+      box-sizing: border-box;
+      padding: 8px;
+      margin-bottom: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 13px;
     }
-    #saveBtn {
-      width: 100%; background-color: #f0f0f0; border: 1px solid #ccc;
-      padding: 5px; cursor: pointer; border-radius: 3px;
+    input[type="text"]:focus { outline: none; border-color: #222; }
+
+    .btn-secondary {
+      width: 100%;
+      background-color: #fff;
+      color: #333;
+      border: 1px solid #ccc;
+      padding: 6px;
+      cursor: pointer;
+      border-radius: 4px;
+      font-size: 12px;
+      transition: all 0.2s;
     }
-    #saveBtn:hover { background-color: #e0e0e0; }
+    .btn-secondary:hover { background-color: #f0f0f0; border-color: #bbb; }
+
+    /* Loading Spinner */
+    .spinner {
+      display: inline-block;
+      width: 12px; height: 12px;
+      border: 2px solid rgba(0,0,0,0.1);
+      border-left-color: #333;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 5px;
+      vertical-align: middle;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
-  <div id="status">Checking...</div>
+  <div id="status">Initializing...</div>
   
-  <button id="devBtn" class="hidden">Go to Dev Site</button>
+  <button id="devBtn" class="btn-main hidden">Go to Dev Site</button>
 
   <hr>
-  <div class="custom-section">
-    <label for="customUrl">Set Custom Override:</label>
-    <input type="text" id="customUrl" placeholder="https://custom-dev-url.com">
-    <button id="saveBtn">Save & Use</button>
+
+  <a id="toggleBtn" class="toggle-link">Set Custom URL</a>
+
+  <div id="customContainer" class="custom-section hidden">
+    <label class="custom-label" for="customUrl">Custom Override</label>
+    <input type="text" id="customUrl" placeholder="https://...">
+    <button id="saveBtn" class="btn-secondary">Save Override</button>
   </div>
 
   <script src="popup.js"></script>

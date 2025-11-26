@@ -1,149 +1,179 @@
 // popup.js
 
-document.addEventListener('DOMContentLoaded', () => {
-  const statusDiv = document.getElementById('status');
-  const devBtn = document.getElementById('devBtn');
-  const customUrlInput = document.getElementById('customUrl');
-  const saveBtn = document.getElementById('saveBtn');
+/**
+ * CONFIGURATION: KNOWN SITE MAPPINGS
+ */
+const PROJECT_MAPPINGS = {
+  "avenuehouse.org": "stephenshouse",
+};
+
+document.addEventListener('DOMContentLoaded', async () => {
+  // UI Elements
+  const ui = {
+    status: document.getElementById('status'),
+    btn: document.getElementById('devBtn'),
+    input: document.getElementById('customUrl'),
+    saveBtn: document.getElementById('saveBtn'),
+    toggleBtn: document.getElementById('toggleBtn'),
+    container: document.getElementById('customContainer')
+  };
+
   let currentCleanHost = "";
 
-  // --- CONFIGURATION ---
-  const PROJECT_MAPPINGS = {
-     // Add manual exceptions here if needed
-     // "avenuehouse.org": "stephenshouse"
+  // Toggle Logic
+  ui.toggleBtn.onclick = () => {
+    ui.container.classList.remove('hidden');
+    ui.toggleBtn.classList.add('hidden');
   };
 
   // 1. Get Current Tab
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    if (!tabs || !tabs[0] || !tabs[0].url) {
-      statusDiv.innerText = "Error: Cannot read tab URL.";
-      return;
-    }
-
-    const currentTab = tabs[0];
-    const url = new URL(currentTab.url);
-    currentCleanHost = url.hostname.replace('www.', '');
-
-    // 2. Check Storage
-    try {
-      chrome.storage.sync.get([currentCleanHost], (result) => {
-        if (chrome.runtime.lastError) return;
-
-        const savedUrl = result[currentCleanHost];
-
-        if (savedUrl) {
-          customUrlInput.value = savedUrl; 
-          updateButton(savedUrl, "Custom Override Active");
-        } else {
-          runAutoDetect(currentTab, url, currentCleanHost);
-        }
-      });
-    } catch (e) {
-      runAutoDetect(currentTab, url, currentCleanHost);
-    }
-  });
-
-  // 3. Save Button
-  saveBtn.onclick = () => {
-    const newUrl = customUrlInput.value.trim();
-    if (!currentCleanHost) return;
-
-    if (!newUrl) {
-      chrome.storage.sync.remove(currentCleanHost, () => {
-        statusDiv.innerText = "Override removed. Re-opening...";
-        statusDiv.style.color = "orange";
-        setTimeout(() => window.close(), 1000);
-      });
-      return;
-    }
-
-    let finalUrl = newUrl;
-    if (!finalUrl.startsWith('http')) finalUrl = 'https://' + finalUrl;
-
-    saveBtn.innerText = "Saving...";
-    chrome.storage.sync.set({ [currentCleanHost]: finalUrl }, () => {
-      saveBtn.innerText = "Save & Use";
-      updateButton(finalUrl, "Custom URL Saved!");
-    });
-  };
-
-  // --- HELPER FUNCTIONS ---
-
-  function updateButton(targetUrl, statusMsg) {
-    devBtn.classList.remove('hidden');
-    devBtn.innerText = "Go to Dev Site";
-    
-    // Clone button to ensure no duplicate listeners
-    const newBtn = devBtn.cloneNode(true);
-    devBtn.parentNode.replaceChild(newBtn, devBtn);
-    
-    newBtn.onclick = () => { chrome.tabs.create({ url: targetUrl }); };
-    
-    statusDiv.innerText = statusMsg;
-    statusDiv.style.color = "green";
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  
+  if (!tab || !tab.url) {
+    setStatus(ui, "Error: Cannot read tab.", "red");
+    return;
   }
 
-  function runAutoDetect(currentTab, url, cleanHost) {
-    chrome.action.getBadgeText({ tabId: currentTab.id }, (text) => {
-      statusDiv.innerText = "Searching for Dev URLs...";
+  const url = new URL(tab.url);
+  currentCleanHost = url.hostname.replace('www.', '');
+
+  console.group("ICG Dev Switcher Debug");
+  console.log("Current Host:", currentCleanHost);
+
+  // 2. Check Storage for Overrides
+  try {
+    const result = await chrome.storage.sync.get([currentCleanHost]);
+    const savedUrl = result[currentCleanHost];
+
+    if (savedUrl) {
+      console.log("Override found in storage:", savedUrl);
       
-      const projectName = cleanHost.split('.')[0];
-      const potentialDevUrls = [];
-
-      // Mappings
-      if (PROJECT_MAPPINGS[cleanHost]) {
-        let mappedValue = PROJECT_MAPPINGS[cleanHost];
-        if (mappedValue.startsWith('http')) {
-            potentialDevUrls.push(mappedValue);
-        } else {
-            potentialDevUrls.push(`${url.protocol}//${mappedValue}.dev.icgonline.co.uk${url.pathname}`);
-        }
-      }
-
-      // Standard Patterns
-      potentialDevUrls.push(`${url.protocol}//dev.${cleanHost}${url.pathname}`);
-      potentialDevUrls.push(`${url.protocol}//${projectName}.dev.icgonline.co.uk${url.pathname}`);
+      // If override exists, auto-open the panel
+      ui.container.classList.remove('hidden');
+      ui.toggleBtn.classList.add('hidden');
       
-      checkUrls(potentialDevUrls);
-    });
-  }
-
-  async function checkUrls(urls) {
-    let found = false;
-    for (const testUrl of urls) {
-      try {
-        console.log(`Testing: ${testUrl}`); 
-        
-        // SWITCHED TO 'GET' to match browser behavior
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 sec timeout
-
-        const response = await fetch(testUrl, { 
-            method: 'GET', // Changed from HEAD
-            cache: 'no-store',
-            signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        
-        console.log(`Response: ${response.status}`);
-        
-        // We accept almost ANY response code. 
-        // If the server talks back (even with a 500 error or 401), the site exists.
-        // We only fail on network timeout or DNS errors (catch block).
-        if (response.ok || [401, 403, 500, 503].includes(response.status)) {
-          found = true;
-          updateButton(testUrl, "Dev site found!");
-          break; 
-        }
-      } catch (error) {
-        console.log(`Failed to reach ${testUrl}`, error);
-      }
+      ui.input.value = savedUrl;
+      showButton(ui, savedUrl, "Custom Override Active");
+    } else {
+      console.log("No override. Starting auto-detect...");
+      await runAutoDetect(tab, url, currentCleanHost, ui);
     }
-    
-    if (!found) {
-      statusDiv.innerText = "No Dev site found. Set Custom URL below.";
-      statusDiv.style.color = "#666";
-    }
+  } catch (error) {
+    console.error("Initialization Error:", error);
+    await runAutoDetect(tab, url, currentCleanHost, ui);
   }
+  
+  console.groupEnd();
+
+  // 3. Save Button Listener
+  ui.saveBtn.onclick = () => handleSave(ui, currentCleanHost);
 });
+
+// --- CORE FUNCTIONS ---
+
+async function runAutoDetect(tab, url, cleanHost, ui) {
+  setStatus(ui, 'Checking Dev URLs <div class="spinner"></div>', "#333", true);
+
+  // Generate Potential URLs
+  const potentialUrls = [];
+  const projectName = cleanHost.split('.')[0]; 
+
+  if (PROJECT_MAPPINGS[cleanHost]) {
+    const map = PROJECT_MAPPINGS[cleanHost];
+    if (map.startsWith('http')) {
+      potentialUrls.push(map);
+    } else {
+      potentialUrls.push(`${url.protocol}//${map}.dev.icgonline.co.uk${url.pathname}`);
+    }
+  }
+
+  potentialUrls.push(`${url.protocol}//dev.${cleanHost}${url.pathname}`);
+  potentialUrls.push(`${url.protocol}//${projectName}.dev.icgonline.co.uk${url.pathname}`);
+
+  console.log("Testing URLs:", potentialUrls);
+
+  const validUrl = await findFirstValidUrl(potentialUrls);
+
+  if (validUrl) {
+    showButton(ui, validUrl, "Dev site found!");
+  } else {
+    // If we fail to find a site, update message telling them to use the link below
+    setStatus(ui, "No Dev site detected.<br>Click 'Set Custom URL' below.", "#666", true);
+  }
+}
+
+async function findFirstValidUrl(urls) {
+  for (const testUrl of urls) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
+
+      console.log(`Pinging: ${testUrl}`);
+      
+      const response = await fetch(testUrl, { 
+        method: 'GET', 
+        cache: 'no-store', 
+        signal: controller.signal 
+      });
+
+      clearTimeout(timeoutId);
+
+      if (response.ok || [401, 403, 500, 503].includes(response.status)) {
+        console.log(`Success! Status ${response.status} at ${testUrl}`);
+        return testUrl;
+      }
+    } catch (err) {
+      console.log(`Failed: ${testUrl}`, err.name);
+    }
+  }
+  return null;
+}
+
+function handleSave(ui, hostKey) {
+  const newUrl = ui.input.value.trim();
+
+  if (!hostKey) return;
+
+  if (!newUrl) {
+    // Delete
+    chrome.storage.sync.remove(hostKey, () => {
+      setStatus(ui, "Override removed. Refreshing...", "orange");
+      setTimeout(() => location.reload(), 800);
+    });
+    return;
+  }
+
+  // Formatting
+  let finalUrl = newUrl;
+  if (!finalUrl.startsWith('http')) finalUrl = 'https://' + finalUrl;
+
+  ui.saveBtn.innerText = "Saving...";
+  
+  chrome.storage.sync.set({ [hostKey]: finalUrl }, () => {
+    ui.saveBtn.innerText = "Saved!";
+    setTimeout(() => ui.saveBtn.innerText = "Save Override", 1500);
+    showButton(ui, finalUrl, "Custom URL Saved!");
+  });
+}
+
+// --- UI HELPERS ---
+
+function setStatus(ui, msg, color, isHTML = false) {
+  if (isHTML) ui.status.innerHTML = msg;
+  else ui.status.innerText = msg;
+  ui.status.style.color = color || "#333";
+}
+
+function showButton(ui, url, msg) {
+  ui.btn.classList.remove('hidden');
+  ui.btn.innerText = `Go to ${new URL(url).hostname}`;
+  ui.btn.title = url;
+  
+  const newBtn = ui.btn.cloneNode(true);
+  ui.btn.parentNode.replaceChild(newBtn, ui.btn);
+  ui.btn = newBtn; 
+  
+  ui.btn.onclick = () => chrome.tabs.create({ url: url });
+  
+  setStatus(ui, msg, "#2ecc71"); 
+}
