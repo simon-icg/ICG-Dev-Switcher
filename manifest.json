@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "ICG Dev Switcher",
-  "version": "1.0.1",
-  "description": "Internal tool to quickly switch between Live and Dev environments for ICG websites.",
+  "name": "ICG Dev Tools",
+  "version": "1.0.2",
+  "description": "Internal tools to quickly switch between Live and Dev environments for ICG websites and test as part of monthly checklists.",
   "permissions": ["activeTab", "storage"],
   "host_permissions": [
     "http://*/*",
