@@ -15,7 +15,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     input: document.getElementById('customUrl'),
     saveBtn: document.getElementById('saveBtn'),
     toggleBtn: document.getElementById('toggleBtn'),
-    container: document.getElementById('customContainer')
+    container: document.getElementById('customContainer'),
+    toolsBtn: document.getElementById('openToolsBtn')
   };
 
   let currentCleanHost = "";
@@ -24,6 +25,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   ui.toggleBtn.onclick = () => {
     ui.container.classList.remove('hidden');
     ui.toggleBtn.classList.add('hidden');
+  };
+
+  ui.toolsBtn.onclick = async () => {
+    // Get the current window
+    const windowId = (await chrome.windows.getCurrent()).id;
+    
+    // Open the side panel for this window
+    // Note: This requires the "sidePanel" permission
+    await chrome.sidePanel.open({ windowId });
+    
+    // Optional: Close the popup so the user sees the side panel immediately
+    window.close();
   };
 
   // 1. Get Current Tab
