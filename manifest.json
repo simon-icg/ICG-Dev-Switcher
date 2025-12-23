@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "ICG Dev Tools",
-  "version": "1.1.0",
-  "description": "Internal tools to switch environments and audit ICG websites.",
+  "version": "1.2.0",
+  "description": "Internal tools to switch environments, audit SEO/Analytics, and visualize accessibility issues on ICG websites.",
   "permissions": [
     "activeTab", 
     "storage", 

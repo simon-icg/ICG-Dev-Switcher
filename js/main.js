@@ -5,6 +5,7 @@ import { AnalyticsChecker } from './analytics-checker.js';
 import { SSLChecker } from './ssl-checker.js';
 import { MetaChecker } from './meta-checker.js';
 import { NonDeveloperChecker } from './non-developer-checker.js';
+import { ImageChecker } from './images-checker.js';
 import { UIHelpers } from './ui-helpers.js';
 
 class SecurityAuditApp {
@@ -120,6 +121,9 @@ class SecurityAuditApp {
         document.getElementById('checkSSL').checked = true;
         document.getElementById('checkMetaTags').checked = true;
         document.getElementById('checkNonDeveloper').checked = true;
+        // Check image option if it exists (handle missing UI element gracefully)
+        const imgCheck = document.getElementById('checkImages');
+        if(imgCheck) imgCheck.checked = true;
 
         await this.runSecurityAudit(this.currentDomain);
       } catch (error) {
@@ -201,8 +205,11 @@ class SecurityAuditApp {
     const checkSSL = document.getElementById('checkSSL').checked;
     const checkMetaTags = document.getElementById('checkMetaTags').checked;
     const checkNonDeveloper = document.getElementById('checkNonDeveloper').checked;
+    // Handle image check (might be missing from DOM if html wasn't updated)
+    const checkImagesEl = document.getElementById('checkImages');
+    const checkImages = checkImagesEl ? checkImagesEl.checked : true; // Default to true if hidden
     
-    console.log('Audit options:', { checkRobots, checkAnalytics, checkSSL, checkMetaTags, checkNonDeveloper });
+    console.log('Audit options:', { checkRobots, checkAnalytics, checkSSL, checkMetaTags, checkNonDeveloper, checkImages });
     
     // Build list of all checks to run (HTTPS/HTTP is always checked)
     const allChecks = [
@@ -229,6 +236,10 @@ class SecurityAuditApp {
     if (checkNonDeveloper) {
       allChecks.push(`Content and Style checks`);
     }
+
+    if (checkImages) {
+        allChecks.push(`Image Optimization & Accessibility`);
+    }
     
     // Create and display checklist
     const checklistContainer = UIHelpers.createChecklist(allChecks);
@@ -241,6 +252,7 @@ class SecurityAuditApp {
     let sslResult = null;
     let metaResult = null;
     let nonDeveloperResult = null;
+    let imageResult = null;
     
     try {
       // Test main URLs (HTTP/HTTPS)
@@ -303,7 +315,7 @@ class SecurityAuditApp {
           sslResult = await SSLChecker.testSSLCertificate(`https://${cleanDomain}`, cleanDomain);
           console.log('SSL result:', sslResult);
           const sslStatus = sslResult.status === 'success' ? 'success' : 
-                           sslResult.status === 'warning' ? 'warning' : 'error';
+                            sslResult.status === 'warning' ? 'warning' : 'error';
           UIHelpers.updateCheckItem(checklistContainer, checkIndex, sslStatus);
         } catch (sslError) {
           console.error('SSL check failed:', sslError);
@@ -347,6 +359,25 @@ class SecurityAuditApp {
         }
         checkIndex++;
       }
+
+      // Test Images (NEW)
+      if (checkImages) {
+        try {
+          UIHelpers.updateCheckItem(checklistContainer, checkIndex, 'testing');
+          console.log('Starting image checks');
+          imageResult = await ImageChecker.testImages(`https://${cleanDomain}`);
+          
+          const imgStatus = imageResult.status === 'success' ? 'success' : 
+                            imageResult.status === 'warning' ? 'warning' : 'error';
+          
+          UIHelpers.updateCheckItem(checklistContainer, checkIndex, imgStatus);
+        } catch (err) {
+          console.error('Image check failed', err);
+          UIHelpers.updateCheckItem(checklistContainer, checkIndex, 'error');
+          imageResult = { status: 'error', details: [err.message] };
+        }
+        checkIndex++;
+      }
       
       // Small delay for better UX then show results in accordion format
       await this.delay(500);
@@ -377,6 +408,40 @@ class SecurityAuditApp {
       
       if (checkMetaTags && metaResult) {
         this.addMetaResults(accordionContainer, metaResult);
+      }
+
+      // Add Image Results
+      if (checkImages && imageResult) {
+        this.addImageResults(accordionContainer, imageResult);
+        
+        const highlightBtn = accordionContainer.querySelector('#btn-highlight-images');
+        
+        if (highlightBtn) {
+          highlightBtn.onclick = async () => {
+            try {
+              // Send message to the active tab
+              const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+              if (tab?.id) {
+                await chrome.tabs.sendMessage(tab.id, { 
+                  action: "highlight_images", 
+                  data: imageResult.analysis // Send the full analysis (missingAlt, missingDimensions)
+                });
+                
+                // Visual feedback on the button
+                const originalText = highlightBtn.innerText;
+                highlightBtn.innerText = "✨ Highlights Active!";
+                highlightBtn.style.backgroundColor = "#e8f5e8";
+                setTimeout(() => {
+                  highlightBtn.innerText = originalText;
+                  highlightBtn.style.backgroundColor = "#fff";
+                }, 2000);
+              }
+            } catch (err) {
+              console.error("Failed to highlight:", err);
+              alert("Could not highlight images. Try refreshing the page.");
+            }
+          };
+        }
       }
       
       // Add timestamp
@@ -635,6 +700,17 @@ class SecurityAuditApp {
           details.push('🍪 Cookie Consent detected (Generic/Unknown provider)');
         }
       }
+
+      // Check for specific issues
+      const gaIssues = analytics.googleAnalytics?.issues || [];
+      const gtmIssues = analytics.googleTagManager?.issues || [];
+
+      if(gaIssues.length > 0 || gtmIssues.length > 0) {
+          details.push('');
+          details.push('⚠️ Implementation Issues:');
+          gaIssues.forEach(i => details.push(`   • ${i}`));
+          gtmIssues.forEach(i => details.push(`   • ${i}`));
+      }
       
       if (details.length === 0) {
         details.push('✅ No major analytics or tracking services detected');
@@ -744,7 +820,7 @@ class SecurityAuditApp {
       // Add specific meta tag content information in a clear, direct format
       if (metaResult.analysis) {
         details.push('');
-        details.push('� META TAG CONTENT:');
+        details.push(' META TAG CONTENT:');
         
         // Title - displayed more prominently
         if (metaResult.analysis.title.present) {
@@ -801,6 +877,14 @@ class SecurityAuditApp {
     }
     
     UIHelpers.addAccordionItem(container, 'nonDeveloper', status, '🎨 Content and Style', details, false);
+  }
+
+  // --- NEW: Image Results Helper ---
+  addImageResults(container, result) {
+    let status = result.status;
+    let details = result.details || ['Check failed'];
+    
+    UIHelpers.addAccordionItem(container, 'images', status, '🖼️ Images & Accessibility', details, false);
   }
 
   escapeHtml(text) {

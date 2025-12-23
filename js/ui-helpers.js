@@ -158,8 +158,8 @@ export class UIHelpers {
       const detailDiv = document.createElement('div');
       detailDiv.className = 'accordion-detail';
       
-      // Check if the detail contains HTML (simple check for HTML tags)
-      if (detail.includes('<div') || detail.includes('<span') || detail.includes('<pre')) {
+      // FIX: Explicitly check for button HTML to allow rendering
+      if (detail.includes('<button') || detail.includes('<div') || detail.includes('<span') || detail.includes('<pre')) {
         detailDiv.innerHTML = detail;
       } else {
         detailDiv.textContent = detail;

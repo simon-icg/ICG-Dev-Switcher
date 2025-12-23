@@ -1,5 +1,6 @@
 // Analytics and tracking detection
 export class AnalyticsChecker {
+  
   static async testAnalyticsTracking(url) {
     try {
       const response = await fetch(url, {
@@ -39,11 +40,13 @@ export class AnalyticsChecker {
       googleAnalytics: {
         found: false,
         versions: [],
-        trackingIds: []
+        trackingIds: [],
+        issues: [] // New: To store duplicate/redundant warnings
       },
       googleTagManager: {
         found: false,
-        containerIds: []
+        containerIds: [],
+        issues: []
       },
       facebookPixel: {
         found: false,
@@ -53,21 +56,11 @@ export class AnalyticsChecker {
         found: false,
         siteIds: []
       },
-      mixpanel: {
-        found: false
-      },
-      amplitude: {
-        found: false
-      },
-      segment: {
-        found: false
-      },
-      intercom: {
-        found: false
-      },
-      zendesk: {
-        found: false
-      },
+      mixpanel: { found: false },
+      amplitude: { found: false },
+      segment: { found: false },
+      intercom: { found: false },
+      zendesk: { found: false },
       cookieConsent: {
         found: false,
         providers: [],
@@ -79,37 +72,77 @@ export class AnalyticsChecker {
       }
     };
 
-    // Google Analytics (Universal Analytics)
-    const gaMatches = html.match(/UA-\d+-\d+/g);
-    if (gaMatches) {
+    // --- GOOGLE ANALYTICS CHECKS ---
+
+    // 1. Universal Analytics (UA) - DEPRECATED
+    // We capture all matches to check for counts
+    const uaMatches = html.match(/UA-\d+-\d+/g) || [];
+    if (uaMatches.length > 0) {
       analytics.googleAnalytics.found = true;
-      analytics.googleAnalytics.versions.push('Universal Analytics');
-      analytics.googleAnalytics.trackingIds = [...new Set(gaMatches)];
+      const uniqueUA = [...new Set(uaMatches)];
+      analytics.googleAnalytics.trackingIds.push(...uniqueUA);
+      
+      // FLAG: Redundant/Old
+      analytics.googleAnalytics.issues.push(`⚠️ Deprecated Universal Analytics tag(s) found: ${uniqueUA.join(', ')}. These should be removed.`);
     }
 
-    // Google Analytics 4
-    const ga4Matches = html.match(/G-[A-Z0-9]+/g);
-    if (ga4Matches) {
+    // 2. Google Analytics 4 (GA4)
+    const ga4Matches = html.match(/G-[A-Z0-9]+/g) || [];
+    if (ga4Matches.length > 0) {
       analytics.googleAnalytics.found = true;
       analytics.googleAnalytics.versions.push('GA4');
-      analytics.googleAnalytics.trackingIds.push(...ga4Matches);
+      
+      // Logic to find duplicates vs unique
+      const uniqueGA4 = [...new Set(ga4Matches)];
+      analytics.googleAnalytics.trackingIds.push(...uniqueGA4);
+      
+      // CHECK COUNTS: Standard gtag.js uses ID twice (src URL + config)
+      // Only warn if we see 3 or more occurrences of the SAME ID
+      if (ga4Matches.length > uniqueGA4.length) {
+        const counts = {};
+        ga4Matches.forEach(id => counts[id] = (counts[id] || 0) + 1);
+        Object.keys(counts).forEach(id => {
+          if (counts[id] > 2) {
+            analytics.googleAnalytics.issues.push(`⚠️ Excessive GA4 ID counts: ${id} appears ${counts[id]} times (Standard gtag.js uses it twice).`);
+          }
+        });
+      }
     }
 
-    // Google Tag Manager
-    const gtmMatches = html.match(/GTM-[A-Z0-9]+/g);
-    if (gtmMatches) {
+    // --- GOOGLE TAG MANAGER CHECKS ---
+    
+    const gtmMatches = html.match(/GTM-[A-Z0-9]+/g) || [];
+    if (gtmMatches.length > 0) {
       analytics.googleTagManager.found = true;
-      analytics.googleTagManager.containerIds = [...new Set(gtmMatches)];
+      const uniqueGTM = [...new Set(gtmMatches)];
+      analytics.googleTagManager.containerIds = uniqueGTM;
+
+      // FLAG: Multiple different containers (GTM-A and GTM-B)
+      if (uniqueGTM.length > 1) {
+        analytics.googleTagManager.issues.push(`⚠️ Multiple distinct GTM containers detected (${uniqueGTM.join(', ')}). Verify if this is intentional.`);
+      }
+
+      // CHECK COUNTS: Standard GTM uses ID twice (Script + Noscript)
+      // Only warn if we see 3 or more occurrences of the SAME ID
+      if (gtmMatches.length > uniqueGTM.length) {
+        const counts = {};
+        gtmMatches.forEach(id => counts[id] = (counts[id] || 0) + 1);
+        Object.keys(counts).forEach(id => {
+          if (counts[id] > 2) {
+            analytics.googleTagManager.issues.push(`⚠️ Excessive GTM counts: ${id} appears ${counts[id]} times (Standard is 2: Script + Noscript).`);
+          }
+        });
+      }
     }
+
+    // --- OTHER ANALYTICS ---
 
     // Facebook Pixel
     const fbPixelMatches = html.match(/fbq\(['"]init['"],\s*['"](\d+)['"]/g);
     if (fbPixelMatches || html.includes('connect.facebook.net')) {
       analytics.facebookPixel.found = true;
       if (fbPixelMatches) {
-        analytics.facebookPixel.pixelIds = fbPixelMatches.map(match => 
-          match.match(/\d+/)[0]
-        );
+        analytics.facebookPixel.pixelIds = fbPixelMatches.map(match => match.match(/\d+/)[0]);
       }
     }
 
@@ -118,37 +151,21 @@ export class AnalyticsChecker {
     if (hotjarMatches || html.includes('static.hotjar.com')) {
       analytics.hotjar.found = true;
       if (hotjarMatches) {
-        analytics.hotjar.siteIds = hotjarMatches.map(match => 
-          match.match(/\d+/)[0]
-        );
+        analytics.hotjar.siteIds = hotjarMatches.map(match => match.match(/\d+/)[0]);
       }
     }
 
-    // Other analytics services
-    if (html.includes('mixpanel') || html.includes('cdn.mxpnl.com')) {
-      analytics.mixpanel.found = true;
-    }
+    // Simple detections
+    if (html.includes('mixpanel') || html.includes('cdn.mxpnl.com')) analytics.mixpanel.found = true;
+    if (html.includes('amplitude') || html.includes('cdn.amplitude.com')) analytics.amplitude.found = true;
+    if (html.includes('segment.com') || html.includes('cdn.segment.com')) analytics.segment.found = true;
+    if (html.includes('intercom') || html.includes('widget.intercom.io')) analytics.intercom.found = true;
+    if (html.includes('zendesk') || html.includes('static.zdassets.com')) analytics.zendesk.found = true;
 
-    if (html.includes('amplitude') || html.includes('cdn.amplitude.com')) {
-      analytics.amplitude.found = true;
-    }
-
-    if (html.includes('segment.com') || html.includes('cdn.segment.com')) {
-      analytics.segment.found = true;
-    }
-
-    if (html.includes('intercom') || html.includes('widget.intercom.io')) {
-      analytics.intercom.found = true;
-    }
-
-    if (html.includes('zendesk') || html.includes('static.zdassets.com')) {
-      analytics.zendesk.found = true;
-    }
-
-    // Cookie consent detection with specific providers
+    // Cookie consent detection
     analytics.cookieConsent = this.detectCookieConsentProviders(html);
 
-    // Retargeting pixels
+    // Retargeting
     const retargetingServices = [
       { name: 'Google Ads', pattern: /googleadservices\.com/i },
       { name: 'Microsoft Ads', pattern: /bat\.bing\.com/i },
@@ -174,7 +191,7 @@ export class AnalyticsChecker {
       details: []
     };
 
-    // Define cookie consent providers with their detection patterns
+    // Full list of providers from original file
     const providers = [
       {
         name: 'OneTrust',
@@ -385,17 +402,31 @@ export class AnalyticsChecker {
   static generateAnalyticsSummary(analytics) {
     const summary = [];
     
+    // --- Google Analytics Summary ---
     if (analytics.googleAnalytics.found) {
       summary.push(`📊 Google Analytics: ${analytics.googleAnalytics.versions.join(', ')}`);
+      
       if (analytics.googleAnalytics.trackingIds.length > 0) {
-        summary.push(`   IDs: ${analytics.googleAnalytics.trackingIds.join(', ')}`);
+         summary.push(`   IDs: ${analytics.googleAnalytics.trackingIds.join(', ')}`);
+      }
+
+      // Add Issues/Warnings to summary
+      if (analytics.googleAnalytics.issues.length > 0) {
+        analytics.googleAnalytics.issues.forEach(issue => summary.push(issue));
       }
     }
 
+    // --- GTM Summary ---
     if (analytics.googleTagManager.found) {
       summary.push(`🏷️ Google Tag Manager: ${analytics.googleTagManager.containerIds.join(', ')}`);
+      
+      // Add Issues/Warnings to summary
+      if (analytics.googleTagManager.issues.length > 0) {
+        analytics.googleTagManager.issues.forEach(issue => summary.push(issue));
+      }
     }
 
+    // --- Other Services ---
     if (analytics.facebookPixel.found) {
       summary.push(`📘 Facebook Pixel: ${analytics.facebookPixel.pixelIds.length > 0 ? analytics.facebookPixel.pixelIds.join(', ') : 'Detected'}`);
     }

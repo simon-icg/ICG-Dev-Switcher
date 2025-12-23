@@ -140,70 +140,87 @@ export class NonDeveloperChecker {
     // Look for copyright in footer elements first
     const footers = doc.querySelectorAll('footer, .footer, #footer, [class*="footer"]');
     
-    // Common copyright patterns - improved to capture company names better
+    // UPDATED: Now supports "© Year Company" AND "© Company Year"
     const copyrightPatterns = [
+      // Format 1: Symbol Year Company (e.g. © 2025 ICG)
       /©\s*(\d{4})\s*([^.\n<]+?)(?:\s*\.|\s*$|\s*<|\s*\||\s*\n)/i,
       /copyright\s*©?\s*(\d{4})\s*([^.\n<]+?)(?:\s*\.|\s*$|\s*<|\s*\||\s*\n)/i,
       /\(c\)\s*(\d{4})\s*([^.\n<]+?)(?:\s*\.|\s*$|\s*<|\s*\||\s*\n)/i,
-      /&copy;\s*(\d{4})\s*([^.\n<]+?)(?:\s*\.|\s*$|\s*<|\s*\||\s*\n)/i,
-      // Fallback patterns for simpler matching
-      /©\s*(\d{4})\s*(.{1,50})/i,
-      /copyright\s*©?\s*(\d{4})\s*(.{1,50})/i
+      
+      // Format 2: Symbol Company Year (e.g. © Cotswold Designer Outlet. 2025)
+      // Captures company in group 1, year in group 2
+      /©\s*([^.\n<]+?)(?:[.,\s]+)(\d{4})/i,
+      /copyright\s*©?\s*([^.\n<]+?)(?:[.,\s]+)(\d{4})/i,
+      /\(c\)\s*([^.\n<]+?)(?:[.,\s]+)(\d{4})/i
     ];
     
     let foundCopyright = null;
     
-    // First check footer elements
+    // Helper to identify which capture group is the year
+    const extractMatch = (match, text, location) => {
+      let year, company;
+      
+      // Check if Group 1 is 4 digits (The Year)
+      if (/^\d{4}$/.test(match[1])) {
+        year = match[1];
+        company = match[2];
+      } 
+      // Check if Group 2 is 4 digits (The Year)
+      else if (/^\d{4}$/.test(match[2])) {
+        company = match[1];
+        year = match[2];
+      } else {
+        return null; 
+      }
+      
+      return {
+        text: match[0].trim(),
+        year: parseInt(year),
+        companyName: company.trim(),
+        location: location
+      };
+    };
+    
+    // 1. Check footer elements
     for (const footer of footers) {
       const footerText = footer.textContent || footer.innerText || '';
-      
       for (const pattern of copyrightPatterns) {
         const match = footerText.match(pattern);
         if (match) {
-          foundCopyright = {
-            text: match[0].trim(),
-            year: parseInt(match[1]),
-            companyName: match[2].trim(),
-            location: 'Footer element'
-          };
-          break;
+          foundCopyright = extractMatch(match, footerText, 'Footer element');
+          if (foundCopyright) break;
         }
       }
       if (foundCopyright) break;
     }
     
-    // If not found in footer, check entire document
+    // 2. Check entire document if not found in footer
     if (!foundCopyright) {
       const bodyText = doc.body ? (doc.body.textContent || doc.body.innerText || '') : html;
-      
       for (const pattern of copyrightPatterns) {
         const match = bodyText.match(pattern);
         if (match) {
-          foundCopyright = {
-            text: match[0].trim(),
-            year: parseInt(match[1]),
-            companyName: match[2].trim(),
-            location: 'Page content'
-          };
-          break;
+          foundCopyright = extractMatch(match, bodyText, 'Page content');
+          if (foundCopyright) break;
         }
       }
     }
     
+    // 3. Validate results
     if (foundCopyright) {
       results.found = true;
       results.text = foundCopyright.text;
       results.year = foundCopyright.year;
       
-      // Clean up company name - remove extra whitespace and common suffixes
+      // Clean up company name
       let cleanCompanyName = foundCopyright.companyName.trim();
-      // Remove common trailing text that might be captured
       cleanCompanyName = cleanCompanyName.replace(/\s*(all rights reserved|reserved|rights reserved).*$/i, '').trim();
+      // Remove trailing periods often captured in "Company."
+      cleanCompanyName = cleanCompanyName.replace(/[.,]$/, '');
       
       results.companyName = cleanCompanyName;
       results.location = foundCopyright.location;
       
-      // Check for issues - require current year for pass
       const currentYear = new Date().getFullYear();
       if (foundCopyright.year !== currentYear) {
         if (foundCopyright.year < currentYear) {
@@ -213,8 +230,7 @@ export class NonDeveloperChecker {
         }
       }
       
-      // More lenient company name validation
-      if (!cleanCompanyName || cleanCompanyName.length < 3) {
+      if (!cleanCompanyName || cleanCompanyName.length < 2) {
         results.issues.push('Company name appears to be missing or too short');
       }
     } else {

@@ -1,6 +1,6 @@
 # 🛠️ ICG Dev Tools & Security Audit
 
-A comprehensive Chrome Extension for the ICG development team. This tool combines environment switching with deep technical auditing capabilities.
+A comprehensive Chrome Extension for the ICG development team. This tool combines environment switching with deep technical auditing and visual debugging capabilities.
 
 ## 🚀 Features
 
@@ -13,20 +13,26 @@ Click the extension icon to access the Quick Switcher.
 ### 2. Deep Audit Tools (Side Panel)
 Click the **"🔒 Open Audit Tools"** button in the popup to open the side panel suite.
 
+* **🖼️ Image & Accessibility (New):**
+    * Scans all images for missing `alt` tags (SEO/A11y risk).
+    * Checks for missing `width` and `height` attributes (CLS performance risk).
+    * **Visual Highlighter:** Click "Highlight Issues" to draw Red (Critical) or Yellow (Warning) borders around problematic images directly on the webpage.
+
+* **📊 Analytics Detector:**
+    * Scans for Google Analytics (UA/GA4), GTM, Facebook Pixel, Hotjar, etc.
+    * **Duplicate Detection:** Flags if GA4 or GTM tags are installed multiple times.
+    * **Code Hygiene:** Warns about deprecated Universal Analytics tags.
+    * Detects Cookie Consent providers (Cookiebot, OneTrust, etc.).
+
 * **🌐 URL & Server Check:**
     * Validates HTTP vs HTTPS accessibility.
     * Checks for proper 301 redirects (Non-WWW vs WWW).
     * **Cloudflare Detection:** Identifies if the site is behind Cloudflare (via headers or IP range).
-    * Displays the real Server IP.
 
 * **🤖 Robots.txt Analyzer:**
     * Reads `robots.txt` and parses rules.
     * Highlights risky `Disallow: /` rules.
     * Detects Sitemap declarations.
-
-* **📊 Analytics Detector:**
-    * Scans for Google Analytics (UA/GA4), GTM, Facebook Pixel, Hotjar, etc.
-    * Detects Cookie Consent providers (Cookiebot, OneTrust, etc.).
 
 * **🔐 SSL & Security:**
     * Checks Certificate validity and expiration.
@@ -50,4 +56,5 @@ Click the **"🔒 Open Audit Tools"** button in the popup to open the side panel
 5.  Select this folder.
 
 ## 🚢 Release Notes
-* **v1.1.0:** Merged Dev Switcher with new Side Panel Audit Tools. Added Cloudflare and SSL security headers checks.
+* **v1.2.0:** Added Visual Image Highlighter, Accessibility checks, and enhanced duplicate Analytics tag detection.
+* **v1.1.0:** Merged Dev Switcher with Side Panel Audit Tools.
