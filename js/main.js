@@ -121,6 +121,8 @@ class SecurityAuditApp {
         document.getElementById('checkSSL').checked = true;
         document.getElementById('checkMetaTags').checked = true;
         document.getElementById('checkNonDeveloper').checked = true;
+        const httpsCheck = document.getElementById('checkHttps');
+        if(httpsCheck) httpsCheck.checked = true;
         // Check image option if it exists (handle missing UI element gracefully)
         const imgCheck = document.getElementById('checkImages');
         if(imgCheck) imgCheck.checked = true;
@@ -196,56 +198,52 @@ class SecurityAuditApp {
     });
   }
 
-  async runSecurityAudit(domain) {
+ async runSecurityAudit(domain) {
     const cleanDomain = domain.replace(/^www\./, '');
     
-    // Check which optional tests are enabled
+    // 1. GATHER OPTIONS
+    // New Checkbox: Default to true if element is missing, otherwise read state
+    const checkHttpsEl = document.getElementById('checkHttps');
+    const checkHttps = checkHttpsEl ? checkHttpsEl.checked : true;
+
     const checkRobots = document.getElementById('checkRobots').checked;
     const checkAnalytics = document.getElementById('checkAnalytics').checked;
     const checkSSL = document.getElementById('checkSSL').checked;
     const checkMetaTags = document.getElementById('checkMetaTags').checked;
     const checkNonDeveloper = document.getElementById('checkNonDeveloper').checked;
-    // Handle image check (might be missing from DOM if html wasn't updated)
+    
     const checkImagesEl = document.getElementById('checkImages');
-    const checkImages = checkImagesEl ? checkImagesEl.checked : true; // Default to true if hidden
+    const checkImages = checkImagesEl ? checkImagesEl.checked : true;
     
-    console.log('Audit options:', { checkRobots, checkAnalytics, checkSSL, checkMetaTags, checkNonDeveloper, checkImages });
+    const checkCookiesEl = document.getElementById('checkCookies');
+    const checkCookies = checkCookiesEl ? checkCookiesEl.checked : true;
     
-    // Build list of all checks to run (HTTPS/HTTP is always checked)
-    const allChecks = [
-      `https://${cleanDomain}`,
-      `http://${cleanDomain}`
-    ];
+    console.log('Audit options:', { checkHttps, checkRobots, checkAnalytics, checkSSL, checkMetaTags, checkNonDeveloper, checkImages, checkCookies });
     
-    if (checkRobots) {
-      allChecks.push(`https://${cleanDomain}/robots.txt`);
-    }
-    
-    if (checkAnalytics) {
-      allChecks.push(`Analytics & Tracking check`);
-    }
-    
-    if (checkSSL) {
-      allChecks.push(`SSL & Security Headers check`);
-    }
-    
-    if (checkMetaTags) {
-      allChecks.push(`Meta Tags & SEO check`);
-    }
-    
-    if (checkNonDeveloper) {
-      allChecks.push(`Content and Style checks`);
-    }
+    // 2. BUILD CHECKLIST ARRAY
+    const allChecks = []; // Start empty
 
-    if (checkImages) {
-        allChecks.push(`Image Optimization & Accessibility`);
+    // Conditionally add HTTP/HTTPS checks
+    if (checkHttps) {
+      allChecks.push(`https://${cleanDomain}`);
+      allChecks.push(`http://${cleanDomain}`);
     }
     
-    // Create and display checklist
+    if (checkRobots) allChecks.push(`https://${cleanDomain}/robots.txt`);
+    if (checkAnalytics) allChecks.push(`Analytics & Tracking check`);
+    if (checkSSL) allChecks.push(`SSL & Security Headers check`);
+    if (checkMetaTags) allChecks.push(`Meta Tags & SEO check`);
+    if (checkNonDeveloper) allChecks.push(`Content and Style checks`);
+    if (checkImages) allChecks.push(`Image Optimization & Accessibility`);
+    if (checkCookies) allChecks.push(`GDPR & Cookie Compliance`);
+    
+    // 3. INITIALIZE UI
     const checklistContainer = UIHelpers.createChecklist(allChecks);
     UIHelpers.displayResults(checklistContainer);
     
     let checkIndex = 0;
+    
+    // Results containers
     let testResults = null;
     let robotsResult = null;
     let analyticsResult = null;
@@ -253,118 +251,116 @@ class SecurityAuditApp {
     let metaResult = null;
     let nonDeveloperResult = null;
     let imageResult = null;
+    let cookieResult = null;
     
     try {
-      // Test main URLs (HTTP/HTTPS)
-      UIHelpers.updateCheckItem(checklistContainer, checkIndex, 'testing');
-      UIHelpers.updateCheckItem(checklistContainer, checkIndex + 1, 'testing');
+      // --- START CHECKS ---
+
+      // 4. Test URLs (Now Conditional)
+      if (checkHttps) {
+        try {
+          UIHelpers.updateCheckItem(checklistContainer, checkIndex, 'testing');
+          UIHelpers.updateCheckItem(checklistContainer, checkIndex + 1, 'testing');
+          
+          console.log('Starting URL tests for domain:', cleanDomain);
+          testResults = await UrlChecker.testUrl(`https://${cleanDomain}`);
+          console.log('URL test results:', testResults);
+          
+          // Update HTTPS result
+          const httpsStatus = testResults.analysis.httpsWorking ? 'success' : 'error';
+          UIHelpers.updateCheckItem(checklistContainer, checkIndex, httpsStatus);
+          checkIndex++;
+          
+          // Update HTTP result
+          const httpStatus = testResults.analysis.httpRedirectsToHttps ? 'success' : 'warning';
+          UIHelpers.updateCheckItem(checklistContainer, checkIndex, httpStatus);
+          checkIndex++;
+        } catch (e) {
+          console.error("URL Check failed", e);
+          // Mark both as error if the checker crashes
+          UIHelpers.updateCheckItem(checklistContainer, checkIndex, 'error');
+          checkIndex++;
+          UIHelpers.updateCheckItem(checklistContainer, checkIndex, 'error');
+          checkIndex++;
+        }
+      }
       
-      console.log('Starting URL tests for domain:', cleanDomain);
-      testResults = await UrlChecker.testUrl(`https://${cleanDomain}`);
-      console.log('URL test results:', testResults);
-      
-      // Update HTTPS result based on analysis
-      const httpsStatus = testResults.analysis.httpsWorking ? 'success' : 'error';
-      UIHelpers.updateCheckItem(checklistContainer, checkIndex, httpsStatus);
-      checkIndex++;
-      
-      // Update HTTP result based on redirect analysis
-      const httpStatus = testResults.analysis.httpRedirectsToHttps ? 'success' : 'warning';
-      UIHelpers.updateCheckItem(checklistContainer, checkIndex, httpStatus);
-      checkIndex++;
-      
-      // Test robots.txt if enabled
+      // 5. Test Robots
       if (checkRobots) {
         try {
           UIHelpers.updateCheckItem(checklistContainer, checkIndex, 'testing');
-          console.log('Starting robots.txt check');
           robotsResult = await RobotsChecker.testRobotsUrl(`https://${cleanDomain}`);
-          console.log('Robots result:', robotsResult);
           const robotsStatus = robotsResult.status === 'success' ? 'success' : 'error';
           UIHelpers.updateCheckItem(checklistContainer, checkIndex, robotsStatus);
-        } catch (robotsError) {
-          console.error('Robots check failed:', robotsError);
+        } catch (e) {
           UIHelpers.updateCheckItem(checklistContainer, checkIndex, 'error');
-          robotsResult = { status: 'error', error: robotsError.message };
+          robotsResult = { status: 'error', error: e.message };
         }
         checkIndex++;
       }
       
-      // Test analytics if enabled
+      // 6. Test Analytics
       if (checkAnalytics) {
         try {
           UIHelpers.updateCheckItem(checklistContainer, checkIndex, 'testing');
-          console.log('Starting analytics check');
           analyticsResult = await AnalyticsChecker.testAnalyticsTracking(`https://${cleanDomain}`);
-          console.log('Analytics result:', analyticsResult);
           const analyticsStatus = analyticsResult.status === 'success' ? 'success' : 'error';
           UIHelpers.updateCheckItem(checklistContainer, checkIndex, analyticsStatus);
-        } catch (analyticsError) {
-          console.error('Analytics check failed:', analyticsError);
+        } catch (e) {
           UIHelpers.updateCheckItem(checklistContainer, checkIndex, 'error');
-          analyticsResult = { status: 'error', error: analyticsError.message };
+          analyticsResult = { status: 'error', error: e.message };
         }
         checkIndex++;
       }
       
-      // Test SSL if enabled
+      // 7. Test SSL
       if (checkSSL) {
         try {
           UIHelpers.updateCheckItem(checklistContainer, checkIndex, 'testing');
-          console.log('Starting SSL check');
           sslResult = await SSLChecker.testSSLCertificate(`https://${cleanDomain}`, cleanDomain);
-          console.log('SSL result:', sslResult);
           const sslStatus = sslResult.status === 'success' ? 'success' : 
                             sslResult.status === 'warning' ? 'warning' : 'error';
           UIHelpers.updateCheckItem(checklistContainer, checkIndex, sslStatus);
-        } catch (sslError) {
-          console.error('SSL check failed:', sslError);
+        } catch (e) {
           UIHelpers.updateCheckItem(checklistContainer, checkIndex, 'error');
-          sslResult = { status: 'error', error: sslError.message };
+          sslResult = { status: 'error', error: e.message };
         }
         checkIndex++;
       }
       
-      // Test meta tags if enabled
+      // 8. Test Meta
       if (checkMetaTags) {
         try {
           UIHelpers.updateCheckItem(checklistContainer, checkIndex, 'testing');
-          console.log('Starting meta tags check');
           metaResult = await MetaChecker.testMetaTags(`https://${cleanDomain}`);
-          console.log('Meta result:', metaResult);
           const metaStatus = metaResult.status === 'success' ? 'success' : 'error';
           UIHelpers.updateCheckItem(checklistContainer, checkIndex, metaStatus);
-        } catch (metaError) {
-          console.error('Meta check failed:', metaError);
+        } catch (e) {
           UIHelpers.updateCheckItem(checklistContainer, checkIndex, 'error');
-          metaResult = { status: 'error', error: metaError.message };
+          metaResult = { status: 'error', error: e.message };
         }
         checkIndex++;
       }
 
-      // Test content and style elements if enabled
+      // 9. Test Non-Dev
       if (checkNonDeveloper) {
         try {
           UIHelpers.updateCheckItem(checklistContainer, checkIndex, 'testing');
-          console.log('Starting content and style checks');
           nonDeveloperResult = await NonDeveloperChecker.testNonDeveloperElements(`https://${cleanDomain}`);
-          console.log('Content and style result:', nonDeveloperResult);
           const nonDevStatus = nonDeveloperResult.status === 'success' ? 'success' : 
                                nonDeveloperResult.status === 'warning' ? 'warning' : 'error';
           UIHelpers.updateCheckItem(checklistContainer, checkIndex, nonDevStatus);
-        } catch (nonDevError) {
-          console.error('Content and style check failed:', nonDevError);
+        } catch (e) {
           UIHelpers.updateCheckItem(checklistContainer, checkIndex, 'error');
-          nonDeveloperResult = { status: 'error', error: nonDevError.message };
+          nonDeveloperResult = { status: 'error', error: e.message };
         }
         checkIndex++;
       }
 
-      // Test Images (NEW)
+      // 10. Test Images
       if (checkImages) {
         try {
           UIHelpers.updateCheckItem(checklistContainer, checkIndex, 'testing');
-          console.log('Starting image checks');
           imageResult = await ImageChecker.testImages(`https://${cleanDomain}`);
           
           const imgStatus = imageResult.status === 'success' ? 'success' : 
@@ -378,56 +374,53 @@ class SecurityAuditApp {
         }
         checkIndex++;
       }
+
+      // 11. Test Cookies
+      if (checkCookies) {
+        try {
+          UIHelpers.updateCheckItem(checklistContainer, checkIndex, 'testing');
+          const cookieResultData = await CookieChecker.testCookies(`https://${cleanDomain}`);
+          cookieResult = cookieResultData;
+          
+          const cookieStatus = cookieResult.status === 'success' ? 'success' : 
+                               cookieResult.status === 'warning' ? 'warning' : 'error';
+          
+          UIHelpers.updateCheckItem(checklistContainer, checkIndex, cookieStatus);
+          
+        } catch (err) {
+          console.error('Cookie check failed', err);
+          UIHelpers.updateCheckItem(checklistContainer, checkIndex, 'error');
+        }
+        checkIndex++;
+      }
       
-      // Small delay for better UX then show results in accordion format
+      // 12. GENERATE REPORT
       await this.delay(500);
       
-      // Create accordion results
       const accordionContainer = UIHelpers.createResultsAccordion();
       
-      // Add Non Developer results first if enabled
-      if (checkNonDeveloper && nonDeveloperResult) {
-        this.addNonDeveloperResults(accordionContainer, nonDeveloperResult);
-      }
+      // Add results conditionally
+      if (checkNonDeveloper && nonDeveloperResult) this.addNonDeveloperResults(accordionContainer, nonDeveloperResult);
+      if (checkHttps && testResults) this.addHttpsHttpResults(accordionContainer, testResults); // <-- Now Conditional
+      if (checkRobots && robotsResult) this.addRobotsResults(accordionContainer, robotsResult);
+      if (checkAnalytics && analyticsResult) this.addAnalyticsResults(accordionContainer, analyticsResult);
+      if (checkSSL && sslResult) this.addSSLResults(accordionContainer, sslResult);
+      if (checkMetaTags && metaResult) this.addMetaResults(accordionContainer, metaResult);
       
-      // Add HTTPS/HTTP results
-      this.addHttpsHttpResults(accordionContainer, testResults);
-      
-      // Add other results if enabled
-      if (checkRobots && robotsResult) {
-        this.addRobotsResults(accordionContainer, robotsResult);
-      }
-      
-      if (checkAnalytics && analyticsResult) {
-        this.addAnalyticsResults(accordionContainer, analyticsResult);
-      }
-      
-      if (checkSSL && sslResult) {
-        this.addSSLResults(accordionContainer, sslResult);
-      }
-      
-      if (checkMetaTags && metaResult) {
-        this.addMetaResults(accordionContainer, metaResult);
-      }
-
-      // Add Image Results
       if (checkImages && imageResult) {
         this.addImageResults(accordionContainer, imageResult);
         
+        // Highlight logic
         const highlightBtn = accordionContainer.querySelector('#btn-highlight-images');
-        
         if (highlightBtn) {
           highlightBtn.onclick = async () => {
             try {
-              // Send message to the active tab
               const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
               if (tab?.id) {
                 await chrome.tabs.sendMessage(tab.id, { 
                   action: "highlight_images", 
-                  data: imageResult.analysis // Send the full analysis (missingAlt, missingDimensions)
+                  data: imageResult.analysis 
                 });
-                
-                // Visual feedback on the button
                 const originalText = highlightBtn.innerText;
                 highlightBtn.innerText = "✨ Highlights Active!";
                 highlightBtn.style.backgroundColor = "#e8f5e8";
@@ -438,39 +431,25 @@ class SecurityAuditApp {
               }
             } catch (err) {
               console.error("Failed to highlight:", err);
-              alert("Could not highlight images. Try refreshing the page.");
+              if (err.message.includes("receiving end does not exist")) {
+                 alert("Connection lost. Please REFRESH the web page and try again.");
+              } else {
+                 alert(`Error: ${err.message}`);
+              }
             }
           };
         }
       }
+
+      if (checkCookies && cookieResult) {
+        this.addCookieResults(accordionContainer, cookieResult);
+      }
       
-      // Add timestamp
       UIHelpers.addTimestamp(accordionContainer);
-      
-      // Replace checklist with accordion results
       UIHelpers.displayResults(accordionContainer);
       
     } catch (error) {
-      console.error('Audit process error:', error);
-      
-      // Show detailed error in the UI
-      const errorContainer = document.createElement('div');
-      errorContainer.className = 'result-item error';
-      errorContainer.innerHTML = `
-        <div class="result-status error">❌ Audit Failed</div>
-        <div style="margin-top: 8px; font-size: 13px;">
-          <strong>Error:</strong> ${error.message}<br>
-          <strong>Location:</strong> ${error.stack ? error.stack.split('\n')[1] || 'Unknown' : 'Unknown'}<br>
-          <details style="margin-top: 8px;">
-            <summary style="cursor: pointer; font-weight: bold;">Show full error details</summary>
-            <pre style="margin-top: 8px; font-size: 11px; background: #f5f5f5; padding: 8px; border-radius: 4px; overflow-x: auto;">${error.stack || 'No stack trace available'}</pre>
-          </details>
-        </div>
-      `;
-      
-      const results = document.getElementById('results');
-      results.innerHTML = '';
-      results.appendChild(errorContainer);
+      this.handleAuditError(error);
     }
   }
 
