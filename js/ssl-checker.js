@@ -2,52 +2,50 @@
 export class SSLChecker {
   static async testSSLCertificate(url, domain) {
     try {
-      // Basic HTTPS connectivity test
+      // 1. Connectivity Check (Does not stop execution on fail)
       const connectivityResult = await this.checkSSLConnection(domain);
+      let localConnectionFailed = !connectivityResult.success;
       
-      if (!connectivityResult.success) {
-        return {
-          url: url,
-          status: 'error',
-          details: [connectivityResult.error || 'SSL connection failed']
-        };
-      }
-
-      // Always perform security headers analysis (contains detailed recommendations)
-      const securityAnalysis = await this.validateSSLHeaders(domain);
-      
-      // Try to get additional certificate details
+      // 2. Fetch Certificate Details (The critical part for dates)
       const certDetails = await this.getSSLCertificateDetails(domain);
       
-      // Combine certificate info with security analysis
+      // 3. Security Headers (Local check)
+      const securityAnalysis = await this.validateSSLHeaders(domain);
+
+      // --- ASSEMBLE REPORT ---
       let combinedDetails = [];
       let status = 'success';
       let grade = 'Basic Check';
-      
+
+      if (localConnectionFailed) {
+          combinedDetails.push(`⚠️ Local connection failed: ${connectivityResult.error}`);
+          combinedDetails.push('   (Falling back to public records...)');
+      } else {
+          combinedDetails.push('✅ HTTPS connection successful');
+      }
+
+      // Add Certificate Date/Issuer Info
       if (certDetails.success && certDetails.data) {
-        // Add certificate information first
         combinedDetails.push(...this.formatCertificateInfo(certDetails.data));
         grade = certDetails.grade || 'Unknown';
+        
+        // Flag errors/warnings based on expiration status
+        if (certDetails.data.expirationStatus === 'expired') status = 'error';
+        else if (certDetails.data.expirationStatus === 'warning') status = 'warning';
       } else {
-        // Add basic SSL info
-        combinedDetails.push('✅ HTTPS connection successful');
-        combinedDetails.push('🔒 SSL certificate appears valid');
+        // If all 3 APIs failed
+        combinedDetails.push('🔒 SSL certificate appears valid locally');
+        combinedDetails.push('⚠️ Expiration date unavailable (All external checks blocked)');
       }
       
-      // Always add security headers analysis with detailed recommendations
+      // Add Security Headers
       if (securityAnalysis.success) {
         combinedDetails.push('');
         combinedDetails.push(...securityAnalysis.details);
-        
-        // Adjust status based on security analysis
-        if (securityAnalysis.securityScore === 0) {
-          status = 'warning'; // No security headers found
-        }
+        if (status !== 'error' && securityAnalysis.securityScore === 0) status = 'warning';
       } else {
         combinedDetails.push('');
         combinedDetails.push('⚠️ Security headers analysis failed');
-        combinedDetails.push(...securityAnalysis.details);
-        status = 'warning';
       }
 
       return {
@@ -58,317 +56,209 @@ export class SSLChecker {
       };
 
     } catch (error) {
-      console.error('SSL certificate test error:', error);
-      return {
-        url: url,
-        status: 'error',
-        details: ['SSL certificate test failed']
-      };
+      console.error('SSL Test Error:', error);
+      return { url: url, status: 'error', details: ['Critical SSL Test Error'] };
     }
   }
 
   static async checkSSLConnection(domain) {
     try {
-      const response = await fetch(`https://${domain}`, {
-        method: 'HEAD',
-        mode: 'no-cors'
-      });
-      
+      await fetch(`https://${domain}`, { method: 'HEAD', mode: 'no-cors' });
       return { success: true };
     } catch (error) {
-      return { 
-        success: false, 
-        error: `SSL connection failed: ${error.message}` 
-      };
+      try {
+          await fetch(`https://${domain}`, { method: 'GET', mode: 'no-cors' });
+          return { success: true };
+      } catch (e2) {
+          return { success: false, error: "Network/Certificate Error" };
+      }
     }
   }
 
   static async getSSLCertificateDetails(domain) {
-    // Try multiple methods to get SSL certificate information
-    
-    // Method 1: SSL Labs API (if available)
-    try {
-      const sslLabsResult = await this.trySSLLabsAPI(domain);
-      if (sslLabsResult.success) {
-        return sslLabsResult;
-      }
-    } catch (error) {
-      console.warn('SSL Labs API failed:', error);
-    }
+    // STRATEGY: Try 3 different sources for robustness
 
-    // Method 2: Alternative SSL checking service
+    // Source 1: NetworkCalc (Fastest JSON API)
     try {
-      const altResult = await this.tryAlternativeSSLCheck(domain);
-      if (altResult.success) {
-        return altResult;
-      }
-    } catch (error) {
-      console.warn('Alternative SSL check failed:', error);
-    }
+        const result = await this.tryNetworkCalcAPI(domain);
+        if (result.success) return result;
+    } catch (e) { console.warn('NetworkCalc failed', e); }
 
-    // Method 3: Basic browser-based validation
-    return await this.basicSSLValidation(domain);
+    // Source 2: crt.sh (BEST for Let's Encrypt / Plesk Sites)
+    // This reads the public transparency log, bypassing server firewalls entirely.
+    try {
+        const result = await this.tryCrtShAPI(domain);
+        if (result.success) return result;
+    } catch (e) { console.warn('crt.sh failed', e); }
+
+    // Source 3: SSL Labs (Detailed but slower)
+    try {
+        const result = await this.trySSLLabsAPI(domain);
+        if (result.success) return result;
+    } catch (e) { console.warn('SSL Labs failed', e); }
+
+    return { success: false };
   }
 
-  static async trySSLLabsAPI(domain) {
-    try {
-      // Note: SSL Labs API requires CORS setup and may not work directly from browser extension
-      const apiUrl = `https://api.ssllabs.com/api/v3/analyze?host=${domain}&publish=off&all=done`;
+  // --- API 1: NetworkCalc ---
+  static async tryNetworkCalcAPI(domain) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); 
+      const response = await fetch(`https://networkcalc.com/api/security/certificate/${domain}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
       
-      const response = await fetch(apiUrl, {
-        mode: 'cors'
-      });
-      
-      if (!response.ok) {
-        throw new Error(`SSL Labs API error: ${response.status}`);
-      }
-      
+      if (!response.ok) throw new Error('API Error');
       const data = await response.json();
       
-      if (data.status === 'READY' && data.endpoints && data.endpoints.length > 0) {
-        const endpoint = data.endpoints[0];
-        return {
-          success: true,
-          data: {
-            grade: endpoint.grade,
-            issuer: data.certs?.[0]?.issuerLabel || 'Unknown',
-            validFrom: new Date(data.certs?.[0]?.notBefore || 0),
-            validTo: new Date(data.certs?.[0]?.notAfter || 0),
-            protocol: endpoint.details?.protocols?.join(', ') || 'Unknown',
-            keySize: data.certs?.[0]?.keySize || 'Unknown'
-          },
-          grade: endpoint.grade
-        };
+      if (data && data.certificate && data.certificate.valid_to) {
+          return {
+              success: true,
+              data: {
+                  issuer: data.certificate.issuer ? data.certificate.issuer.O : 'Let\'s Encrypt',
+                  validTo: new Date(data.certificate.valid_to),
+                  grade: 'Standard',
+                  protocol: 'TLS (Modern)'
+              }
+          };
       }
-      
-      throw new Error('SSL Labs analysis not ready or failed');
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
+      throw new Error('Invalid Data');
   }
 
-  static async tryAlternativeSSLCheck(domain) {
-    try {
-      // Alternative method using a different service or approach
-      // This is a placeholder for other SSL checking services
-      const response = await fetch(`https://${domain}`, {
-        method: 'HEAD'
-      });
+  // --- API 2: crt.sh (Transparency Log) ---
+  static async tryCrtShAPI(domain) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout for large logs
       
-      // Extract what we can from the response headers
-      const securityHeaders = {
-        'strict-transport-security': response.headers.get('strict-transport-security'),
-        'content-security-policy': response.headers.get('content-security-policy'),
-        'x-frame-options': response.headers.get('x-frame-options'),
-        'x-content-type-options': response.headers.get('x-content-type-options')
-      };
+      // Query the public ledger for this domain
+      const response = await fetch(`https://crt.sh/?q=${domain}&output=json`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) throw new Error('crt.sh Error');
       
+      const entries = await response.json();
+      
+      if (entries && entries.length > 0) {
+          // Sort by ID descending to get the newest certificate
+          // crt.sh returns all history, we only want the active one
+          const newest = entries.sort((a, b) => b.id - a.id)[0];
+          
+          if (newest && newest.not_after) {
+              return {
+                  success: true,
+                  data: {
+                      issuer: newest.issuer_name || 'Let\'s Encrypt',
+                      validTo: new Date(newest.not_after),
+                      grade: 'Standard',
+                      protocol: 'TLS (Modern)',
+                      source: 'crt.sh Public Log'
+                  }
+              };
+          }
+      }
+      throw new Error('No valid certs found');
+  }
+
+  // --- API 3: SSL Labs ---
+  static async trySSLLabsAPI(domain) {
+    const apiUrl = `https://api.ssllabs.com/api/v3/analyze?host=${domain}&publish=off&all=done`;
+    const response = await fetch(apiUrl, { mode: 'cors' });
+    if (!response.ok) throw new Error('API Error');
+    const data = await response.json();
+    
+    if (data.status === 'READY' && data.endpoints?.[0]) {
       return {
         success: true,
         data: {
-          grade: 'B', // Default grade for basic check
-          securityHeaders: securityHeaders,
-          httpsOnly: response.url.startsWith('https://'),
-          timestamp: new Date()
+          grade: data.endpoints[0].grade,
+          issuer: data.certs?.[0]?.issuerLabel || 'Unknown',
+          validTo: new Date(data.certs?.[0]?.notAfter || 0),
+          protocol: data.endpoints[0].details?.protocols?.join(', ') || 'TLS'
         }
       };
-    } catch (error) {
-      return { success: false, error: error.message };
     }
+    throw new Error('Analysis Not Ready');
   }
 
   static async validateSSLHeaders(domain) {
     try {
-      const httpsUrl = `https://${domain}`;
-      const response = await fetch(httpsUrl, { 
-        method: 'HEAD',
-        mode: 'cors'
-      });
-      
+      const response = await fetch(`https://${domain}`, { method: 'HEAD', mode: 'cors' });
       const details = [];
-      
-      // Check for security headers with detailed analysis
       const securityHeaders = {
-        'strict-transport-security': {
-          name: 'HSTS',
-          importance: 'Essential',
-          description: 'Prevents downgrade attacks and cookie hijacking'
-        },
-        'content-security-policy': {
-          name: 'CSP',
-          importance: 'Recommended', 
-          description: 'Prevents XSS attacks and data injection'
-        },
-        'x-frame-options': {
-          name: 'X-Frame-Options',
-          importance: 'Recommended',
-          description: 'Prevents clickjacking attacks'
-        },
-        'x-content-type-options': {
-          name: 'X-Content-Type-Options',
-          importance: 'Recommended',
-          description: 'Prevents MIME type sniffing attacks'
-        }
+        'strict-transport-security': { name: 'HSTS', importance: 'Essential', description: 'Prevents downgrade attacks' },
+        'content-security-policy': { name: 'CSP', importance: 'Recommended', description: 'Prevents XSS' },
+        'x-frame-options': { name: 'X-Frame-Options', importance: 'Recommended', description: 'Prevents clickjacking' },
+        'x-content-type-options': { name: 'X-Content-Type-Options', importance: 'Recommended', description: 'Prevents MIME sniffing' }
       };
       
-      const headerResults = {};
       let foundCount = 0;
+      const headerResults = {};
       
       Object.keys(securityHeaders).forEach(header => {
         const value = response.headers.get(header);
-        headerResults[header] = {
-          found: !!value,
-          value: value,
-          ...securityHeaders[header]
-        };
+        headerResults[header] = { found: !!value, value: value, ...securityHeaders[header] };
         if (value) foundCount++;
       });
       
-      // Add summary
       details.push(`🛡️ Security Headers Analysis: ${foundCount}/${Object.keys(securityHeaders).length} present`);
       
-      // Add simple header status breakdown
       Object.entries(headerResults).forEach(([key, info]) => {
         const icon = info.found ? '✅' : '❌';
         const importance = info.importance === 'Essential' ? '🔴 Essential' : '🟡 Recommended';
-        if (info.found) {
-          details.push(`   ${icon} ${info.name} (${importance})`);
-        } else {
-          details.push(`   ${icon} ${info.name} (${importance}) - ${info.description}`);
-        }
+        details.push(info.found ? `   ${icon} ${info.name} (${importance})` : `   ${icon} ${info.name} (${importance}) - ${info.description}`);
       });
       
-      if (foundCount === Object.keys(securityHeaders).length) {
-        details.push('');
-        details.push('🎉 Excellent: All recommended security headers are present!');
-      }
-      
-      return {
-        success: true,
-        details: details,
-        headerResults: headerResults,
-        securityScore: foundCount
-      };
+      return { success: true, details: details, securityScore: foundCount, headerResults: headerResults };
     } catch (error) {
-      return {
-        success: false,
-        details: [`❌ Security headers analysis failed: ${error.message}`]
-      };
-    }
-  }
-
-  static async basicSSLValidation(domain) {
-    try {
-      const httpsUrl = `https://${domain}`;
-      const response = await fetch(httpsUrl, { 
-        method: 'HEAD',
-        mode: 'cors'
-      });
-      
-      const details = [
-        '✅ HTTPS connection successful',
-        `📊 Response status: ${response.status}`,
-        '🔒 SSL certificate appears valid'
-      ];
-      
-      // Get security headers analysis
-      const securityAnalysis = await this.validateSSLHeaders(domain);
-      
-      if (securityAnalysis.success) {
-        details.push('');
-        details.push(...securityAnalysis.details);
-        
-        return {
-          success: true,
-          details: details,
-          headerResults: securityAnalysis.headerResults,
-          securityScore: securityAnalysis.securityScore
-        };
-      } else {
-        details.push('');
-        details.push(...securityAnalysis.details);
-        
-        return {
-          success: false,
-          details: details
-        };
-      }
-      
-    } catch (error) {
-      return {
-        success: false,
-        details: [`❌ SSL validation failed: ${error.message}`]
-      };
+      return { success: false, details: [`❌ Security headers failed: ${error.message}`] };
     }
   }
 
   static formatCertificateInfo(certData) {
     const details = [];
     
-    if (certData.grade) {
+    // Grade display
+    if (certData.grade && certData.grade !== 'Basic' && certData.grade !== 'Standard') {
       details.push(`🏆 SSL Grade: ${certData.grade}`);
     }
     
-    if (certData.issuer) {
-      details.push(`🏢 Issuer: ${certData.issuer}`);
-    }
+    // Issuer display (Clean up Let's Encrypt names)
+    let issuer = certData.issuer;
+    if (issuer.includes("Let's Encrypt")) issuer = "Let's Encrypt (R3)";
+    details.push(`🏢 Issuer: ${issuer}`);
     
-    if (certData.validFrom && certData.validTo) {
+    // DATE & EXPIRATION LOGIC
+    if (certData.validTo) {
       const now = new Date();
-      const daysUntilExpiry = Math.ceil((certData.validTo - now) / (1000 * 60 * 60 * 24));
+      const validTo = new Date(certData.validTo);
+      const daysUntilExpiry = Math.ceil((validTo - now) / (1000 * 60 * 60 * 24));
       
-      details.push(`📅 Valid until: ${certData.validTo.toDateString()}`);
+      details.push(`📅 Expires: ${validTo.toLocaleDateString()}`);
       
-      if (daysUntilExpiry > 30) {
-        details.push(`✅ Expires in ${daysUntilExpiry} days`);
-      } else if (daysUntilExpiry > 0) {
-        details.push(`⚠️ Expires in ${daysUntilExpiry} days`);
+      const isCurrentMonth = (validTo.getMonth() === now.getMonth()) && (validTo.getFullYear() === now.getFullYear());
+      
+      if (daysUntilExpiry < 0) {
+        details.push(`❌ CERTIFICATE EXPIRED (${Math.abs(daysUntilExpiry)} days ago)`);
+        certData.expirationStatus = 'expired';
+      } else if (daysUntilExpiry < 30) {
+        details.push(`⚠️ Expires in ${daysUntilExpiry} days (Renew Soon!)`);
+        certData.expirationStatus = 'warning';
+      } else if (isCurrentMonth) {
+        details.push(`⚠️ Expires THIS MONTH (${validTo.toLocaleDateString()})`);
+        certData.expirationStatus = 'warning';
       } else {
-        details.push(`❌ Certificate expired ${Math.abs(daysUntilExpiry)} days ago`);
+        details.push(`✅ Valid for ${daysUntilExpiry} more days`);
       }
+    } else {
+        details.push('⚠️ Expiration date not found');
     }
     
-    if (certData.protocol) {
-      details.push(`🔐 Protocols: ${certData.protocol}`);
-    }
+    if (certData.protocol) details.push(`🔐 Protocols: ${certData.protocol}`);
+    if (certData.source) details.push(`ℹ️ Source: ${certData.source}`);
     
-    if (certData.keySize) {
-      details.push(`🔑 Key size: ${certData.keySize} bits`);
-    }
-    
-    // Enhanced security headers analysis
-    if (certData.securityHeaders) {
-      const headerCount = Object.values(certData.securityHeaders).filter(Boolean).length;
-      details.push('');
-      details.push(`🛡️ Security Headers: ${headerCount}/4 detected`);
-      
-      // Show which headers are present/missing
-      const headerDescriptions = {
-        'strict-transport-security': 'Prevents downgrade attacks and cookie hijacking',
-        'content-security-policy': 'Prevents XSS attacks and data injection',
-        'x-frame-options': 'Prevents clickjacking attacks',
-        'x-content-type-options': 'Prevents MIME type sniffing attacks'
-      };
-      
-      Object.entries(certData.securityHeaders).forEach(([header, value]) => {
-        const icon = value ? '✅' : '❌';
-        const importance = header === 'strict-transport-security' ? '🔴 Essential' : '🟡 Recommended';
-        const name = header === 'strict-transport-security' ? 'HSTS' :
-                    header === 'content-security-policy' ? 'CSP' : 
-                    header === 'x-frame-options' ? 'X-Frame-Options' : 
-                    'X-Content-Type-Options';
-        
-        if (value) {
-          details.push(`   ${icon} ${name} (${importance})`);
-        } else {
-          details.push(`   ${icon} ${name} (${importance}) - ${headerDescriptions[header]}`);
-        }
-      });
-      
-      if (headerCount < 4) {
-        details.push('');
-        details.push('💡 Missing security headers detected');
-      }
+    // Append header info if passed from API logic
+    if (certData.securityHeaders && Object.keys(certData.securityHeaders).length > 0) {
+        const hCount = Object.values(certData.securityHeaders).filter(h => h.found).length;
+        if(hCount === 0) details.push('💡 Missing security headers detected');
     }
     
     return details;

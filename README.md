@@ -13,39 +13,39 @@ Click the extension icon to access the Quick Switcher.
 ### 2. Deep Audit Tools (Side Panel)
 Click the **"🔒 Open Audit Tools"** button in the popup to open the side panel suite.
 
-* **🖼️ Image & Accessibility (New):**
-    * Scans all images for missing `alt` tags (SEO/A11y risk).
-    * Checks for missing `width` and `height` attributes (CLS performance risk).
-    * **Visual Highlighter:** Click "Highlight Issues" to draw Red (Critical) or Yellow (Warning) borders around problematic images directly on the webpage.
+* **🎨 Content & Style:**
+    * **Copyright Check:** Ensures the footer copyright year is current.
+    * **Web Fonts:** Lists Google Fonts, Adobe Fonts, or custom `@font-face` usage.
+    * **Social Links:** Checks if social links open in new tabs and use `rel="noopener"`.
 
 * **📊 Analytics Detector:**
     * Scans for Google Analytics (UA/GA4), GTM, Facebook Pixel, Hotjar, etc.
     * **Duplicate Detection:** Flags if GA4 or GTM tags are installed multiple times.
     * **Code Hygiene:** Warns about deprecated Universal Analytics tags.
-    * Detects Cookie Consent providers (Cookiebot, OneTrust, etc.).
 
-* **🌐 URL & Server Check:**
+* **🔐 SSL & Security:**
+    * **Certificate Expiration:** Checks validity periods and warns if expiring within the current month.
+    * **Deep Verification:** Uses public transparency logs (crt.sh) to verify Let's Encrypt/Plesk certificates even if the local network blocks the request.
+    * **Security Headers:** Validates HSTS, CSP, X-Frame-Options, and X-Content-Type-Options.
+
+* **🌐 HTTPS & Redirects:**
     * Validates HTTP vs HTTPS accessibility.
     * Checks for proper 301 redirects (Non-WWW vs WWW).
-    * **Cloudflare Detection:** Identifies if the site is behind Cloudflare (via headers or IP range).
+    * **Cloudflare Detection:** Identifies if the site is behind Cloudflare.
 
 * **🤖 Robots.txt Analyzer:**
     * Reads `robots.txt` and parses rules.
     * Highlights risky `Disallow: /` rules.
     * Detects Sitemap declarations.
 
-* **🔐 SSL & Security:**
-    * Checks Certificate validity and expiration.
-    * **Security Headers:** Validates HSTS, CSP, X-Frame-Options, and X-Content-Type-Options.
-
 * **🏷️ SEO & Meta:**
     * Validates Title/Description length.
     * Checks Canonical tags, OG (Open Graph) tags, and Twitter Cards.
 
-* **🎨 Content & Style:**
-    * **Copyright Check:** Ensures the footer copyright year is current.
-    * **Web Fonts:** Lists Google Fonts, Adobe Fonts, or custom `@font-face` usage.
-    * **Social Links:** Checks if social links open in new tabs and use `rel="noopener"`.
+* **🖼️ Image & Accessibility:**
+    * Scans all images for missing `alt` tags (SEO/A11y risk).
+    * Checks for missing `width` and `height` attributes (CLS performance risk).
+    * **Visual Highlighter:** Click "Highlight Issues" to draw Red (Critical) or Yellow (Warning) borders around problematic images directly on the webpage.
 
 ## 📦 Installation (Development)
 
@@ -56,5 +56,8 @@ Click the **"🔒 Open Audit Tools"** button in the popup to open the side panel
 5.  Select this folder.
 
 ## 🚢 Release Notes
+* **v1.3.0:** * **SSL Audit Enhancement:** Upgraded the SSL checker to use multi-source verification (NetworkCalc + crt.sh). This fixes "Date Not Found" errors on Let's Encrypt/Plesk sites.
+    * **UI Reorg:** Reordered the checklist to match the monthly PDF workflow (Content first).
+    * **HTTPS Option:** Separated the HTTPS/Redirect check into its own optional toggle.
 * **v1.2.0:** Added Visual Image Highlighter, Accessibility checks, and enhanced duplicate Analytics tag detection.
 * **v1.1.0:** Merged Dev Switcher with Side Panel Audit Tools.
