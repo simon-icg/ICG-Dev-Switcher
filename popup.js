@@ -1,4 +1,5 @@
 // popup.js
+import { DesignerImageSize } from './js/designer-image-size.js';
 
 /**
  * CONFIGURATION: KNOWN SITE MAPPINGS
@@ -16,10 +17,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     saveBtn: document.getElementById('saveBtn'),
     toggleBtn: document.getElementById('toggleBtn'),
     container: document.getElementById('customContainer'),
-    toolsBtn: document.getElementById('openToolsBtn')
+    toolsBtn: document.getElementById('openToolsBtn'),
+    designerBtn: document.getElementById('designerBtn')
   };
 
   let currentCleanHost = "";
+
+  // --- NEW: Designer Tool Logic ---
+  ui.designerBtn.onclick = async () => {
+    await DesignerImageSize.startInteractiveSizer();
+    window.close(); // Close the popup so they can see the crosshairs on the page
+  };
 
   // Toggle Logic
   ui.toggleBtn.onclick = () => {

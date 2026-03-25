@@ -29,6 +29,26 @@
     .btn-main:hover { background-color: #444; }
     .btn-main:disabled { background-color: #999; cursor: default; }
 
+    /* Designer Button (New) */
+    .btn-designer {
+      background-color: #9c27b0;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      cursor: pointer;
+      border-radius: 6px;
+      width: 100%;
+      font-weight: 600;
+      font-size: 14px;
+      transition: background 0.2s;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-designer:hover { background-color: #7b1fa2; }
+
     /* Audit Button (New) */
     .btn-audit {
       background-color: #007cba;
@@ -123,6 +143,17 @@
   </style>
 </head>
 <body>
+  
+  <button id="designerBtn" class="btn-designer">
+    <span>📐</span> Get Asset Sizes
+  </button>
+
+  <button id="openToolsBtn" class="btn-audit">
+    <span>🔒</span> Open Audit Tools
+  </button>
+
+  <hr>
+
   <div id="status">Initializing...</div>
   
   <button id="devBtn" class="btn-main hidden">Go to Dev Site</button>
@@ -135,12 +166,6 @@
     <button id="saveBtn" class="btn-secondary">Save Override</button>
   </div>
 
-  <hr>
-
-  <button id="openToolsBtn" class="btn-audit">
-    <span>🔒</span> Open Audit Tools
-  </button>
-
-  <script src="popup.js"></script>
+  <script type="module" src="popup.js"></script>
 </body>
 </html>

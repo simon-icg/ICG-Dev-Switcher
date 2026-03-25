@@ -194,6 +194,7 @@ class SecurityAuditApp {
         this.runSelectedButton.disabled = false;
       }
     });
+
   }
 
   async runSecurityAudit(domain) {

@@ -4,13 +4,19 @@ A comprehensive Chrome Extension for the ICG development team. This tool combine
 
 ## 🚀 Features
 
-### 1. Environment Switcher (Popup)
-Click the extension icon to access the Quick Switcher.
+### 1. Designer Tools (Popup)
+Click the **"📐 Get Asset Sizes"** button in the popup to launch the interactive asset sizer.
+* **X-Ray Selection:** Hover over any image on the page (even through transparent overlays, sliders, or `::after` elements) to highlight it.
+* **Automated Breakpoint Scanner:** Clicks trigger an invisible background scan that tests the image against 7 standard agency breakpoints (320px up to 2560px).
+* **@2x Export Calculation:** Instantly calculates the absolute maximum dimensions the image will ever render at, providing the exact `@2x` retina export size for designers.
+* **Object-Fit Detection:** Warns if the image uses `object-fit: cover` and might be cropped.
+
+### 2. Environment Switcher (Popup)
 * **Auto-Detect:** Automatically finds the `dev.` or `project.dev` equivalent of the current site.
 * **Custom Override:** Manually map a live site to a specific dev URL (saved in local storage).
 * **Visual Status:** Displays a green checkmark badge on the icon when viewing an ICG-managed site.
 
-### 2. Deep Audit Tools (Side Panel)
+### 3. Deep Audit Tools (Side Panel)
 Click the **"🔒 Open Audit Tools"** button in the popup to open the side panel suite.
 
 * **🎨 Content & Style:**
@@ -25,7 +31,7 @@ Click the **"🔒 Open Audit Tools"** button in the popup to open the side panel
 
 * **🔐 SSL & Security:**
     * **Certificate Expiration:** Checks validity periods and warns if expiring within the current month.
-    * **Deep Verification:** Uses public transparency logs (crt.sh) to verify Let's Encrypt/Plesk certificates even if the local network blocks the request.
+    * **Deep Verification:** Uses public transparency logs (crt.sh) and NetworkCalc to verify Let's Encrypt/Plesk certificates even if the local network blocks the request.
     * **Security Headers:** Validates HSTS, CSP, X-Frame-Options, and X-Content-Type-Options.
 
 * **🌐 HTTPS & Redirects:**
@@ -56,8 +62,7 @@ Click the **"🔒 Open Audit Tools"** button in the popup to open the side panel
 5.  Select this folder.
 
 ## 🚢 Release Notes
-* **v1.3.0:** * **SSL Audit Enhancement:** Upgraded the SSL checker to use multi-source verification (NetworkCalc + crt.sh). This fixes "Date Not Found" errors on Let's Encrypt/Plesk sites.
-    * **UI Reorg:** Reordered the checklist to match the monthly PDF workflow (Content first).
-    * **HTTPS Option:** Separated the HTTPS/Redirect check into its own optional toggle.
+* **v1.4.0:** Added the **Interactive Asset Sizer** tool with X-Ray element selection and automated breakpoint scanning for Designers. Reorganized the popup UI.
+* **v1.3.0:** Upgraded the SSL checker to use multi-source verification (NetworkCalc + crt.sh). This fixes "Date Not Found" errors on Let's Encrypt/Plesk sites.
 * **v1.2.0:** Added Visual Image Highlighter, Accessibility checks, and enhanced duplicate Analytics tag detection.
 * **v1.1.0:** Merged Dev Switcher with Side Panel Audit Tools.
