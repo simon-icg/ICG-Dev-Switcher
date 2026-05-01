@@ -136,7 +136,7 @@ function injectedSizerLogic() {
             
             targetInIframe.scrollIntoView();
 
-            const breakpoints = [320, 480, 768, 1024, 1440, 1920, 2560];
+            const breakpoints = [320, 480, 768, 1024, 1440, 1920];
             
             for (let bp of breakpoints) {
               iframe.style.width = bp + 'px';
@@ -162,10 +162,14 @@ function injectedSizerLogic() {
       console.warn('ICG Tools: Auto-scan blocked by site security, falling back to manual observer.', error);
     }
 
-    renderFinalUI(ui, imgElement, maxW, maxH, scanSuccess, highlightColor);
+    // Grab the actual intrinsic size of the loaded image file
+    const naturalW = imgElement.naturalWidth;
+    const naturalH = imgElement.naturalHeight;
+
+    renderFinalUI(ui, imgElement, maxW, maxH, scanSuccess, highlightColor, naturalW, naturalH);
   }
 
-  function renderFinalUI(ui, imgElement, maxW, maxH, autoScanned, highlightColor) {
+  function renderFinalUI(ui, imgElement, maxW, maxH, autoScanned, highlightColor, naturalW, naturalH) {
     const objectFit = window.getComputedStyle(imgElement).objectFit;
     let fitWarning = objectFit === 'cover' 
       ? `<div style="color: #ffb74d; font-size: 12px; margin-top: 8px;">⚠️ Uses 'object-fit: cover' (Image crops automatically)</div>` 
@@ -175,7 +179,6 @@ function injectedSizerLogic() {
       ? `<span style="background:#4caf50; color:#fff; font-size:10px; padding:2px 6px; border-radius:10px; margin-left:8px;">Auto-Scanned</span>`
       : `<span style="background:#f44336; color:#fff; font-size:10px; padding:2px 6px; border-radius:10px; margin-left:8px;">Manual Drag Required</span>`;
 
-    // Added an indicator in the UI to tell them it was an X-Ray find
     const indirectNotice = highlightColor === "#ff9800" 
       ? `<div style="font-size:10px; color:#ff9800; margin-bottom: 5px;">🔍 Found via X-Ray (Behind overlay)</div>` 
       : ``;
@@ -186,18 +189,23 @@ function injectedSizerLogic() {
         <button id="icg-close-sizer" style="background:none; border:none; color:#aaa; cursor:pointer; font-size:16px; padding:0; margin:0;">✖</button>
       </div>
       ${indirectNotice}
+      
+      <div style="margin-bottom: 6px; font-size: 13px;">
+        <span style="color: #aaa;">Current Source File:</span> <strong style="color: #64b5f6;">${naturalW}px × ${naturalH}px</strong>
+      </div>
+
       <div style="margin-bottom: 10px; font-size: 13px;">
-        <span style="color: #aaa;">Max Size Found:</span> <strong style="color: #4caf50;" id="icg-max-size-txt">${maxW}px × ${maxH}px</strong>
+        <span style="color: #aaa;">Max Rendered Size:</span> <strong style="color: #4caf50;" id="icg-max-size-txt">${maxW}px × ${maxH}px</strong>
       </div>
       <div style="background: #1e1e1e; padding: 12px; border-radius: 6px; margin-top: 10px;">
-        <div style="font-size: 11px; color: #aaa; margin-bottom: 4px; letter-spacing: 0.5px;">DESIGNER EXPORT (@2x)</div>
+        <div style="font-size: 11px; color: #aaa; margin-bottom: 4px; letter-spacing: 0.5px;">RECOMMENDED EXPORT (@2x)</div>
         <div style="font-size: 20px; font-weight: bold; color: #fff; margin:0;" id="icg-export-txt">
           ${maxW * 2}px × ${maxH * 2}px
         </div>
       </div>
       ${fitWarning}
       <div style="font-size: 11px; color: #888; margin-top: 12px; line-height: 1.4;">
-        ${autoScanned ? '✅ Breakpoints checked: Mobile through 4K.' : '👉 Drag your browser window from mobile to desktop to calculate sizes.'}
+        ${autoScanned ? '✅ Breakpoints checked: Mobile through 1920px.' : '👉 Drag your browser window from mobile to desktop to calculate sizes.'}
       </div>
     `;
 
@@ -222,7 +230,6 @@ function injectedSizerLogic() {
       }
     });
     
-    // Apply the chosen color to the final solid outline
     imgElement.style.outline = `4px solid ${highlightColor}`;
     imgElement.style.outlineOffset = "2px";
     window._icgCurrentObserver.observe(imgElement);
