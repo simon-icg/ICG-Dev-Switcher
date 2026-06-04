@@ -8,7 +8,7 @@ A comprehensive Chrome Extension for the ICG development team. This tool combine
 Click the **"📐 Get Asset Sizes"** button in the popup to launch the interactive asset sizer.
 * **X-Ray Selection:** Hover over any image on the page (even through transparent overlays, sliders, or `::after` elements) to highlight it.
 * **Automated Breakpoint Scanner:** Clicks trigger an invisible background scan that tests the image against 6 standard agency breakpoints (320px up to 1920px).
-* **@2x Export Calculation:** Instantly calculates the absolute maximum dimensions the image will ever render at, providing the exact `@2x` retina export size for designers.
+* **Max Rendered Size & Retina:** Prominently highlights the absolute maximum 1x CSS dimensions the image will ever render at, while continuing to calculate the `@2x` retina export size underneath it.
 * **Source File Detection:** Displays the actual intrinsic dimensions of the currently loaded image file to help spot massive, unoptimized uploads.
 * **Object-Fit Detection:** Warns if the image uses `object-fit: cover` and might be cropped.
 
@@ -63,7 +63,8 @@ Click the **"🔒 Open Audit Tools"** button in the popup to open the side panel
 5.  Select this folder.
 
 ## 🚢 Release Notes
-* **v1.4.1:** Optimized the Asset Sizer. Capped automated breakpoints at 1920px for realistic `@2x` retina sizing and added detection of current intrinsic image file dimensions.
+* **v1.4.2:** Flipped the visual hierarchy in the Asset Sizer UI to prioritize the Max Rendered Size (1x CSS) over the Retina (@2x) export size. 
+* **v1.4.1:** Optimized the Asset Sizer. Capped automated breakpoints at 1920px for realistic sizing and added detection of current intrinsic image file dimensions.
 * **v1.4.0:** Added the **Interactive Asset Sizer** tool with X-Ray element selection and automated breakpoint scanning for Designers. Reorganized the popup UI.
 * **v1.3.0:** Upgraded the SSL checker to use multi-source verification (NetworkCalc + crt.sh).
 * **v1.2.0:** Added Visual Image Highlighter, Accessibility checks, and enhanced duplicate Analytics tag detection.
