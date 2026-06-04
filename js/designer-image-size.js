@@ -194,14 +194,14 @@ function injectedSizerLogic() {
         <span style="color: #aaa;">Current Source File:</span> <strong style="color: #64b5f6;">${naturalW}px × ${naturalH}px</strong>
       </div>
 
-      <div style="margin-bottom: 10px; font-size: 13px;">
-        <span style="color: #aaa;">Max Rendered Size:</span> <strong style="color: #4caf50;" id="icg-max-size-txt">${maxW}px × ${maxH}px</strong>
-      </div>
-      <div style="background: #1e1e1e; padding: 12px; border-radius: 6px; margin-top: 10px;">
-        <div style="font-size: 11px; color: #aaa; margin-bottom: 4px; letter-spacing: 0.5px;">RECOMMENDED EXPORT (@2x)</div>
+      <div style="background: #1e1e1e; padding: 12px; border-radius: 6px; margin-top: 10px; margin-bottom: 10px; border: 1px solid ${highlightColor};">
+        <div style="font-size: 11px; color: #aaa; margin-bottom: 4px; letter-spacing: 0.5px;">Max Rendered Size:</div>
         <div style="font-size: 20px; font-weight: bold; color: #fff; margin:0;" id="icg-export-txt">
-          ${maxW * 2}px × ${maxH * 2}px
+          ${maxW}px × ${maxH}px
         </div>
+      </div>
+      <div style="margin-bottom: 10px; font-size: 13px;">
+        <span style="color: #aaa;">Retina export (@2x):</span> <strong style="color: #4caf50;" id="icg-max-size-txt">${maxW * 2}px × ${maxH * 2}px</strong>
       </div>
       ${fitWarning}
       <div style="font-size: 11px; color: #888; margin-top: 12px; line-height: 1.4;">
